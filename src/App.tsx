@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
+import GanttTimeline from "./GanttTimeline";
 import {
   Plus,
   Calendar,
@@ -341,8 +343,25 @@ export default function App() {
     };
   }, [db, appId, user]);
 
-  // UI States
-  const [activeTab, setActiveTab] = useState("dashboard");
+  // URL based tab management
+  const location = useLocation();
+  const navigate = useNavigate();
+  const activeTab = (() => {
+    const path = location.pathname;
+    if (path.startsWith("/timeline")) return "timeline";
+    if (path.startsWith("/input")) return "input";
+    if (path.startsWith("/management")) return "management";
+    if (path.startsWith("/archive")) return "archive";
+    if (path.startsWith("/share")) return "share";
+    return "dashboard";
+  })();
+  const setActiveTab = (tab: string) => {
+    const routes: Record<string, string> = {
+      dashboard: "/", timeline: "/timeline", input: "/input",
+      management: "/management", archive: "/archive", share: "/share",
+    };
+    navigate(routes[tab] || "/");
+  };
   const [selectedProjectId, setSelectedProjectId] = useState(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -351,6 +370,7 @@ export default function App() {
   const [expandedTaskIds, setExpandedTaskIds] = useState([]);
   const [dashboardSortMode, setDashboardSortMode] = useState("deadline"); // "deadline", "deliveryDate", "machineNumber"
   const [taskSortMode, setTaskSortMode] = useState("deadline"); // "deadline", "createdAt"
+  const [timelineSortMode, setTimelineSortMode] = useState("deliveryDate"); // "deliveryDate", "machineNumber", "projectName", "progress", "nearestDeadline"
 
   // Form States
   const [newProject, setNewProject] = useState({
@@ -1531,110 +1551,17 @@ export default function App() {
           </div>
         )}
 
-        {/* --- TIMELINE VIEW --- */}
+
+        {/* --- TIMELINE VIEW (GANTT CHART) --- */}
         {activeTab === "timeline" && (
-          <div className="max-w-6xl mx-auto h-full flex flex-col">
-            <header className="mb-4 md:mb-6">
-              <h2 className="text-xl md:text-2xl font-bold text-gray-900">
-                タイムライン (工程表)
-              </h2>
-              <p className="text-sm text-gray-500">
-                全プロジェクトのスケジュール一覧
-              </p>
-            </header>
-
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-x-auto flex-1">
-              <div className="p-4 md:p-6 min-w-[700px]">
-                <div className="flex items-center justify-between mb-4 border-b pb-2">
-                  <div className="w-1/3 font-bold text-gray-600 text-sm">
-                    プロジェクト / タスク
-                  </div>
-                  <div className="flex-1 flex justify-between text-xs text-gray-400 px-4">
-                    <span>進行状況と期限</span>
-                    <span className="text-emerald-600 font-bold">Today</span>
-                    <span>Future</span>
-                  </div>
-                </div>
-
-                <div className="space-y-6">
-                  {projects
-                    .filter((p) => p.status !== "Completed")
-                    .map((project) => {
-                      const projectTasks = tasks
-                        .filter((t) => t.projectId === project.id)
-                        .sort(
-                          (a, b) => new Date(a.deadline) - new Date(b.deadline)
-                        );
-                      return (
-                        <div
-                          key={project.id}
-                          className="border border-gray-100 rounded-lg p-3 md:p-4 bg-gray-50"
-                        >
-                          <div className="flex flex-wrap items-center gap-2 mb-3">
-                            <span className="text-xs font-bold text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded">
-                              {project.machineNumber}
-                            </span>
-                            <h3 className="font-bold text-gray-800 text-sm">
-                              {project.projectName}
-                            </h3>
-                            <span className="text-xs text-gray-500 ml-auto whitespace-nowrap">
-                              納入: {project.deliveryDate}
-                            </span>
-                          </div>
-
-                          <div className="space-y-2">
-                            {projectTasks.map((task) => {
-                              const dlStatus = getDeadlineStatus(
-                                task.deadline,
-                                task.completed
-                              );
-                              const dlColorClass =
-                                getDeadlineColorClass(dlStatus);
-                              return (
-                                <div
-                                  key={task.id}
-                                  className="flex items-center gap-2 md:gap-4"
-                                >
-                                  <div className="w-1/3 text-xs md:text-sm truncate flex items-center gap-1.5 md:gap-2 pr-2">
-                                    <span
-                                      className={`flex-shrink-0 w-2 h-2 rounded-full ${
-                                        task.completed
-                                          ? "bg-emerald-400"
-                                          : "bg-gray-300"
-                                      }`}
-                                    ></span>
-                                    <span
-                                      className={`truncate ${
-                                        task.completed
-                                          ? "text-gray-400 line-through"
-                                          : "text-gray-700"
-                                      }`}
-                                    >
-                                      {task.title}
-                                    </span>
-                                  </div>
-                                  <div className="flex-1 bg-white h-7 md:h-8 rounded border border-gray-200 relative overflow-hidden flex items-center px-2">
-                                    <div
-                                      className={`text-[10px] md:text-xs flex items-center gap-1 z-10 relative ${dlColorClass}`}
-                                    >
-                                      <Calendar size={10} />{" "}
-                                      {task.deadline || "期限なし"}
-                                    </div>
-                                    {task.completed && (
-                                      <div className="absolute left-0 top-0 bottom-0 bg-emerald-100 w-full opacity-50"></div>
-                                    )}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      );
-                    })}
-                </div>
-              </div>
-            </div>
-          </div>
+          <GanttTimeline
+            projects={projects}
+            tasks={tasks}
+            timelineSortMode={timelineSortMode}
+            setTimelineSortMode={setTimelineSortMode}
+            calculateProgress={calculateProgress}
+            getDeadlineStatus={getDeadlineStatus}
+          />
         )}
 
         {/* --- INPUT VIEW --- */}
