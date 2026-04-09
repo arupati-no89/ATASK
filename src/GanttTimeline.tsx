@@ -37,6 +37,30 @@ export default function GanttTimeline({
 }: GanttTimelineProps) {
   const activeProjects = projects.filter((p) => p.status !== "Completed");
 
+  // ---- Sort helpers ----
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const countOverdue = (projectId: string) =>
+    tasks.filter((t) => {
+      if (t.projectId !== projectId || t.completed || !t.deadline) return false;
+      const d = new Date(t.deadline);
+      d.setHours(0, 0, 0, 0);
+      return d.getTime() < today.getTime();
+    }).length;
+
+  const countUrgent = (projectId: string) =>
+    tasks.filter((t) => {
+      if (t.projectId !== projectId || t.completed || !t.deadline) return false;
+      const d = new Date(t.deadline);
+      d.setHours(0, 0, 0, 0);
+      const diff = Math.ceil((d.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+      return diff >= 0 && diff <= 3;
+    }).length;
+
+  const countUncompleted = (projectId: string) =>
+    tasks.filter((t) => t.projectId === projectId && !t.completed).length;
+
   // Sort projects
   const sortedProjects = [...activeProjects].sort((a, b) => {
     const pa = calculateProgress(a.id);
@@ -48,24 +72,44 @@ export default function GanttTimeline({
     const nb = tb.filter((t) => !t.completed && t.deadline)
       .sort((x, y) => new Date(x.deadline!).getTime() - new Date(y.deadline!).getTime())[0]?.deadline;
 
-    if (timelineSortMode === "deliveryDate") {
-      return (a.deliveryDate ? new Date(a.deliveryDate).getTime() : 9e15)
-        - (b.deliveryDate ? new Date(b.deliveryDate).getTime() : 9e15);
-    } else if (timelineSortMode === "machineNumber") {
-      return (a.machineNumber || "").localeCompare(b.machineNumber || "");
-    } else if (timelineSortMode === "projectName") {
-      return (a.projectName || "").localeCompare(b.projectName || "");
-    } else if (timelineSortMode === "progress") {
-      return pa - pb;
-    } else if (timelineSortMode === "nearestDeadline") {
-      return (na ? new Date(na).getTime() : 9e15) - (nb ? new Date(nb).getTime() : 9e15);
+    switch (timelineSortMode) {
+      // ---- 日付系 ----
+      case "deliveryDate":
+        return (a.deliveryDate ? new Date(a.deliveryDate).getTime() : 9e15)
+          - (b.deliveryDate ? new Date(b.deliveryDate).getTime() : 9e15);
+      case "deliveryDateDesc":
+        return (b.deliveryDate ? new Date(b.deliveryDate).getTime() : -9e15)
+          - (a.deliveryDate ? new Date(a.deliveryDate).getTime() : -9e15);
+      case "nearestDeadline":
+        return (na ? new Date(na).getTime() : 9e15) - (nb ? new Date(nb).getTime() : 9e15);
+      case "createdAtDesc":
+        return ((b as any).createdAt ?? 0) - ((a as any).createdAt ?? 0);
+      case "createdAtAsc":
+        return ((a as any).createdAt ?? 0) - ((b as any).createdAt ?? 0);
+      // ---- タスク状況系 ----
+      case "overdueFirst":
+        return countOverdue(b.id) - countOverdue(a.id);
+      case "urgentFirst":
+        return countUrgent(b.id) - countUrgent(a.id);
+      case "uncompletedFirst":
+        return countUncompleted(b.id) - countUncompleted(a.id);
+      case "progress":
+        return pa - pb;
+      case "progressDesc":
+        return pb - pa;
+      // ---- 名前系 ----
+      case "machineNumber":
+        return (a.machineNumber || "").localeCompare(b.machineNumber || "", "ja");
+      case "projectName":
+        return (a.projectName || "").localeCompare(b.projectName || "", "ja");
+      case "customer":
+        return (a.customer || "").localeCompare(b.customer || "", "ja");
+      default:
+        return 0;
     }
-    return 0;
   });
 
   // ---- Gantt chart date range ----
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
 
   const allDates = [
     ...tasks.filter((t) => t.deadline).map((t) => new Date(t.deadline!)),
@@ -154,11 +198,25 @@ export default function GanttTimeline({
             onChange={(e) => setTimelineSortMode(e.target.value)}
             className="border-0 bg-transparent focus:outline-none font-semibold text-emerald-700 cursor-pointer"
           >
-            <option value="deliveryDate">納入日が早い順</option>
-            <option value="nearestDeadline">タスク期限が近い順</option>
-            <option value="machineNumber">機番順</option>
-            <option value="projectName">工事名順</option>
-            <option value="progress">進捗が低い順</option>
+            <optgroup label="── 日付・期日 ──">
+              <option value="deliveryDate">📅 納入日が早い順</option>
+              <option value="deliveryDateDesc">📅 納入日が遅い順</option>
+              <option value="nearestDeadline">⏰ タスク期限が近い順</option>
+              <option value="createdAtDesc">🆕 登録が新しい順</option>
+              <option value="createdAtAsc">🗂 登録が古い順</option>
+            </optgroup>
+            <optgroup label="── タスク状況 ──">
+              <option value="overdueFirst">🔴 期限切れタスクが多い順</option>
+              <option value="urgentFirst">⚠️ 緊急タスクが多い順</option>
+              <option value="uncompletedFirst">📋 未完了タスクが多い順</option>
+              <option value="progress">📉 進捗が低い順</option>
+              <option value="progressDesc">📈 進捗が高い順</option>
+            </optgroup>
+            <optgroup label="── 名前順 ──">
+              <option value="machineNumber">🔢 機番順</option>
+              <option value="projectName">🏗 工事名順</option>
+              <option value="customer">🏢 顧客名順</option>
+            </optgroup>
           </select>
         </div>
       </header>
