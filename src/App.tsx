@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import GanttTimeline from "./GanttTimeline";
+import GanttTimeline, {
+  DEFAULT_SORT_SETTINGS,
+  TimelineSortSettings,
+} from "./GanttTimeline";
 import {
   Plus,
   Calendar,
@@ -370,7 +373,21 @@ export default function App() {
   const [expandedTaskIds, setExpandedTaskIds] = useState([]);
   const [dashboardSortMode, setDashboardSortMode] = useState("deadline"); // "deadline", "deliveryDate", "machineNumber"
   const [taskSortMode, setTaskSortMode] = useState("deadline"); // "deadline", "createdAt"
-  const [timelineSortMode, setTimelineSortMode] = useState("deliveryDate"); // "deliveryDate", "machineNumber", "projectName", "progress", "nearestDeadline"
+  // タイムラインソート設定 (localStorage永続化)
+  const [timelineSortSettings, setTimelineSortSettings] = useState<TimelineSortSettings>(() => {
+    try {
+      const saved = localStorage.getItem("atask-timeline-sort-settings");
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return DEFAULT_SORT_SETTINGS;
+  });
+  const [timelineSortMode, setTimelineSortMode] = useState(() => timelineSortSettings.defaultSort);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("atask-timeline-sort-settings", JSON.stringify(timelineSortSettings));
+    } catch {}
+  }, [timelineSortSettings]);
 
   // Form States
   const [newProject, setNewProject] = useState({
@@ -1561,6 +1578,8 @@ export default function App() {
             setTimelineSortMode={setTimelineSortMode}
             calculateProgress={calculateProgress}
             getDeadlineStatus={getDeadlineStatus}
+            sortSettings={timelineSortSettings}
+            setSortSettings={setTimelineSortSettings}
           />
         )}
 

@@ -1,5 +1,43 @@
-import React from "react";
-import { Calendar } from "lucide-react";
+import React, { useState } from "react";
+import { Calendar, Settings2, Check, RotateCcw } from "lucide-react";
+
+// --- ソートオプション定義 ---
+export interface SortOption {
+  value: string;
+  label: string;
+  group: string;
+}
+
+export const TIMELINE_SORT_OPTIONS: SortOption[] = [
+  // 日付・期日
+  { value: "deliveryDate", label: "📅 納入日が早い順", group: "日付・期日" },
+  { value: "deliveryDateDesc", label: "📅 納入日が遅い順", group: "日付・期日" },
+  { value: "nearestDeadline", label: "⏰ タスク期限が近い順", group: "日付・期日" },
+  { value: "createdAtDesc", label: "🆕 登録が新しい順", group: "日付・期日" },
+  { value: "createdAtAsc", label: "🗂 登録が古い順", group: "日付・期日" },
+  // タスク状況
+  { value: "overdueFirst", label: "🔴 期限切れタスクが多い順", group: "タスク状況" },
+  { value: "urgentFirst", label: "⚠️ 緊急タスクが多い順", group: "タスク状況" },
+  { value: "uncompletedFirst", label: "📋 未完了タスクが多い順", group: "タスク状況" },
+  { value: "progress", label: "📉 進捗が低い順", group: "タスク状況" },
+  { value: "progressDesc", label: "📈 進捗が高い順", group: "タスク状況" },
+  // 名前順
+  { value: "machineNumber", label: "🔢 機番順", group: "名前順" },
+  { value: "projectName", label: "🏗 工事名順", group: "名前順" },
+  { value: "customer", label: "🏢 顧客名順", group: "名前順" },
+];
+
+export const ALL_SORT_VALUES = TIMELINE_SORT_OPTIONS.map((o) => o.value);
+
+export interface TimelineSortSettings {
+  defaultSort: string;
+  visibleSorts: string[];
+}
+
+export const DEFAULT_SORT_SETTINGS: TimelineSortSettings = {
+  defaultSort: "deliveryDate",
+  visibleSorts: ["deliveryDate", "nearestDeadline", "progress", "machineNumber", "customer"],
+};
 
 interface Project {
   id: string;
@@ -25,6 +63,8 @@ interface GanttTimelineProps {
   setTimelineSortMode: (mode: string) => void;
   calculateProgress: (projectId: string) => number;
   getDeadlineStatus: (deadline: string | undefined, completed: boolean) => string;
+  sortSettings: TimelineSortSettings;
+  setSortSettings: (settings: TimelineSortSettings) => void;
 }
 
 export default function GanttTimeline({
@@ -34,7 +74,16 @@ export default function GanttTimeline({
   setTimelineSortMode,
   calculateProgress,
   getDeadlineStatus,
+  sortSettings,
+  setSortSettings,
 }: GanttTimelineProps) {
+  const [showSortSettings, setShowSortSettings] = useState(false);
+
+  // 表示するソートオプション（設定でフィルタ）
+  const visibleOptions = TIMELINE_SORT_OPTIONS.filter((o) =>
+    sortSettings.visibleSorts.includes(o.value)
+  );
+  const groups = [...new Set(visibleOptions.map((o) => o.group))];
   const activeProjects = projects.filter((p) => p.status !== "Completed");
 
   // ---- Sort helpers ----
@@ -191,35 +240,130 @@ export default function GanttTimeline({
           </h2>
           <p className="text-sm text-gray-500">全プロジェクトの Gantt チャート</p>
         </div>
-        <div className="flex items-center gap-2 text-xs md:text-sm bg-white border border-gray-200 rounded-lg px-3 py-2 shadow-sm flex-shrink-0">
-          <span className="text-gray-500 font-medium whitespace-nowrap">並び順:</span>
-          <select
-            value={timelineSortMode}
-            onChange={(e) => setTimelineSortMode(e.target.value)}
-            className="border-0 bg-transparent focus:outline-none font-semibold text-emerald-700 cursor-pointer"
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="flex items-center gap-2 text-xs md:text-sm bg-white border border-gray-200 rounded-lg px-3 py-2 shadow-sm">
+            <span className="text-gray-500 font-medium whitespace-nowrap">並び順:</span>
+            <select
+              value={timelineSortMode}
+              onChange={(e) => setTimelineSortMode(e.target.value)}
+              className="border-0 bg-transparent focus:outline-none font-semibold text-emerald-700 cursor-pointer"
+            >
+              {groups.map((group) => (
+                <optgroup key={group} label={`── ${group} ──`}>
+                  {visibleOptions
+                    .filter((o) => o.group === group)
+                    .map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                </optgroup>
+              ))}
+            </select>
+          </div>
+          <button
+            onClick={() => setShowSortSettings(!showSortSettings)}
+            className={`p-2 rounded-lg border transition-colors ${
+              showSortSettings
+                ? "bg-emerald-50 border-emerald-300 text-emerald-700"
+                : "bg-white border-gray-200 text-gray-500 hover:text-emerald-600 hover:border-emerald-200"
+            }`}
+            title="ソート設定"
           >
-            <optgroup label="── 日付・期日 ──">
-              <option value="deliveryDate">📅 納入日が早い順</option>
-              <option value="deliveryDateDesc">📅 納入日が遅い順</option>
-              <option value="nearestDeadline">⏰ タスク期限が近い順</option>
-              <option value="createdAtDesc">🆕 登録が新しい順</option>
-              <option value="createdAtAsc">🗂 登録が古い順</option>
-            </optgroup>
-            <optgroup label="── タスク状況 ──">
-              <option value="overdueFirst">🔴 期限切れタスクが多い順</option>
-              <option value="urgentFirst">⚠️ 緊急タスクが多い順</option>
-              <option value="uncompletedFirst">📋 未完了タスクが多い順</option>
-              <option value="progress">📉 進捗が低い順</option>
-              <option value="progressDesc">📈 進捗が高い順</option>
-            </optgroup>
-            <optgroup label="── 名前順 ──">
-              <option value="machineNumber">🔢 機番順</option>
-              <option value="projectName">🏗 工事名順</option>
-              <option value="customer">🏢 顧客名順</option>
-            </optgroup>
-          </select>
+            <Settings2 size={16} />
+          </button>
         </div>
       </header>
+
+      {/* Sort Settings Panel */}
+      {showSortSettings && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex-shrink-0">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-bold text-gray-700">ソート設定</h3>
+            <button
+              onClick={() => {
+                setSortSettings(DEFAULT_SORT_SETTINGS);
+                setTimelineSortMode(DEFAULT_SORT_SETTINGS.defaultSort);
+              }}
+              className="text-[10px] md:text-xs text-gray-400 hover:text-emerald-600 flex items-center gap-1"
+            >
+              <RotateCcw size={12} /> 初期値に戻す
+            </button>
+          </div>
+
+          {/* デフォルトソート */}
+          <div className="mb-4">
+            <label className="block text-xs font-medium text-gray-500 mb-1">
+              デフォルトの並び順
+            </label>
+            <select
+              value={sortSettings.defaultSort}
+              onChange={(e) => {
+                setSortSettings({ ...sortSettings, defaultSort: e.target.value });
+              }}
+              className="text-xs md:text-sm border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:border-emerald-500 font-medium text-gray-700 w-full max-w-xs"
+            >
+              {sortSettings.visibleSorts.map((val) => {
+                const opt = TIMELINE_SORT_OPTIONS.find((o) => o.value === val);
+                return opt ? (
+                  <option key={val} value={val}>
+                    {opt.label}
+                  </option>
+                ) : null;
+              })}
+            </select>
+          </div>
+
+          {/* 表示するソート項目 */}
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-2">
+              表示するソート項目
+            </label>
+            {["日付・期日", "タスク状況", "名前順"].map((group) => (
+              <div key={group} className="mb-2">
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
+                  {group}
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {TIMELINE_SORT_OPTIONS.filter((o) => o.group === group).map((opt) => {
+                    const isVisible = sortSettings.visibleSorts.includes(opt.value);
+                    return (
+                      <button
+                        key={opt.value}
+                        onClick={() => {
+                          let newVisible: string[];
+                          if (isVisible) {
+                            // 最低1つは残す
+                            if (sortSettings.visibleSorts.length <= 1) return;
+                            newVisible = sortSettings.visibleSorts.filter((v) => v !== opt.value);
+                            // デフォルトが消えたら先頭に変更
+                            const newDefault = newVisible.includes(sortSettings.defaultSort)
+                              ? sortSettings.defaultSort
+                              : newVisible[0];
+                            setSortSettings({ defaultSort: newDefault, visibleSorts: newVisible });
+                            if (timelineSortMode === opt.value) setTimelineSortMode(newDefault);
+                          } else {
+                            newVisible = [...sortSettings.visibleSorts, opt.value];
+                            setSortSettings({ ...sortSettings, visibleSorts: newVisible });
+                          }
+                        }}
+                        className={`text-[10px] md:text-xs px-2 py-1 rounded-full border flex items-center gap-1 transition-colors ${
+                          isVisible
+                            ? "bg-emerald-50 border-emerald-300 text-emerald-700"
+                            : "bg-gray-50 border-gray-200 text-gray-400"
+                        }`}
+                      >
+                        {isVisible && <Check size={10} />}
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Legend */}
       <div className="flex flex-wrap items-center gap-4 text-[10px] md:text-xs flex-shrink-0 bg-white px-3 py-2 rounded-lg border border-gray-100 shadow-sm">
@@ -252,11 +396,28 @@ export default function GanttTimeline({
           </div>
         ) : (
           <div className="overflow-auto flex-1">
-            <div style={{ minWidth: LEFT_COL + CHART_WIDTH }}>
+            <div style={{ minWidth: LEFT_COL + CHART_WIDTH }} className="relative">
+
+              {/* Grid overlay — rendered ONCE for the entire chart */}
+              <div
+                className="absolute pointer-events-none"
+                style={{ left: LEFT_COL, top: 0, width: CHART_WIDTH, bottom: 0 }}
+              >
+                {weekLabels.map((wl, i) => (
+                  <div
+                    key={i}
+                    className="absolute top-0 bottom-0 w-px bg-gray-100"
+                    style={{ left: wl.x }}
+                  />
+                ))}
+                <div
+                  className="absolute top-0 bottom-0 w-0.5 bg-red-200/60 z-10"
+                  style={{ left: todayX }}
+                />
+              </div>
 
               {/* Sticky date-axis header row */}
               <div className="flex sticky top-0 z-30 bg-gray-50 border-b-2 border-gray-300 shadow-sm">
-                {/* Corner cell */}
                 <div
                   style={{ width: LEFT_COL, minWidth: LEFT_COL }}
                   className="flex-shrink-0 sticky left-0 z-40 bg-gray-50 border-r-2 border-gray-300 h-14 flex items-end px-3 pb-2"
@@ -265,12 +426,10 @@ export default function GanttTimeline({
                     工事 / タスク
                   </span>
                 </div>
-                {/* Date axis */}
                 <div
                   style={{ width: CHART_WIDTH, minWidth: CHART_WIDTH }}
                   className="flex-shrink-0 h-14 relative"
                 >
-                  {/* Month labels */}
                   {monthLabels.map((ml, i) => (
                     <div
                       key={i}
@@ -280,7 +439,6 @@ export default function GanttTimeline({
                       {ml.label}
                     </div>
                   ))}
-                  {/* Week labels */}
                   {weekLabels.map((wl, i) => (
                     <div
                       key={i}
@@ -290,15 +448,6 @@ export default function GanttTimeline({
                       {wl.label}
                     </div>
                   ))}
-                  {/* Week grid lines */}
-                  {weekLabels.map((wl, i) => (
-                    <div
-                      key={`wg-${i}`}
-                      className="absolute top-5 bottom-0 w-px bg-gray-200"
-                      style={{ left: wl.x }}
-                    />
-                  ))}
-                  {/* TODAY line */}
                   <div
                     className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-20"
                     style={{ left: todayX }}
@@ -326,8 +475,7 @@ export default function GanttTimeline({
                 return (
                   <div key={project.id} className="border-b-2 border-gray-200">
                     {/* Project header row */}
-                    <div className="flex bg-emerald-50 border-b border-emerald-200">
-                      {/* Left: project info */}
+                    <div className="flex bg-emerald-50/80 border-b border-emerald-200">
                       <div
                         style={{ width: LEFT_COL, minWidth: LEFT_COL }}
                         className="flex-shrink-0 sticky left-0 z-20 bg-emerald-50 border-r border-emerald-200 px-3 py-2"
@@ -352,23 +500,10 @@ export default function GanttTimeline({
                           <span className="text-[10px] font-bold text-emerald-700">{progress}%</span>
                         </div>
                       </div>
-                      {/* Right: project Gantt row */}
                       <div
                         style={{ width: CHART_WIDTH, minWidth: CHART_WIDTH, height: 56 }}
                         className="flex-shrink-0 relative"
                       >
-                        {weekLabels.map((wl, i) => (
-                          <div
-                            key={i}
-                            className="absolute top-0 bottom-0 w-px bg-emerald-100"
-                            style={{ left: wl.x }}
-                          />
-                        ))}
-                        <div
-                          className="absolute top-0 bottom-0 w-0.5 bg-red-200"
-                          style={{ left: todayX }}
-                        />
-                        {/* Delivery date marker */}
                         {project.deliveryDate && (
                           <div
                             className="absolute flex flex-col items-center z-20"
@@ -384,7 +519,6 @@ export default function GanttTimeline({
                             </span>
                           </div>
                         )}
-                        {/* Customer label */}
                         {project.customer && (
                           <div className="absolute left-2 bottom-1 text-[9px] text-emerald-600 font-medium">
                             {project.customer}
@@ -402,15 +536,7 @@ export default function GanttTimeline({
                         >
                           タスクなし
                         </div>
-                        <div
-                          style={{ width: CHART_WIDTH, minWidth: CHART_WIDTH, height: 32 }}
-                          className="flex-shrink-0 relative"
-                        >
-                          <div
-                            className="absolute top-0 bottom-0 w-0.5 bg-red-100"
-                            style={{ left: todayX }}
-                          />
-                        </div>
+                        <div style={{ width: CHART_WIDTH, minWidth: CHART_WIDTH, height: 32 }} className="flex-shrink-0" />
                       </div>
                     ) : (
                       projectTasks.map((task) => {
@@ -419,9 +545,8 @@ export default function GanttTimeline({
                         return (
                           <div
                             key={task.id}
-                            className="flex border-b border-gray-100 hover:bg-gray-50 transition-colors"
+                            className="flex border-b border-gray-100 hover:bg-gray-50/50"
                           >
-                            {/* Left: task name */}
                             <div
                               style={{ width: LEFT_COL, minWidth: LEFT_COL }}
                               className={`flex-shrink-0 sticky left-0 z-10 border-r border-gray-100 px-3 h-9 flex items-center gap-1.5 ${
@@ -443,34 +568,16 @@ export default function GanttTimeline({
                                 {task.title}
                               </span>
                             </div>
-                            {/* Right: Gantt bar */}
                             <div
-                              style={{
-                                width: CHART_WIDTH,
-                                minWidth: CHART_WIDTH,
-                                height: 36,
-                              }}
+                              style={{ width: CHART_WIDTH, minWidth: CHART_WIDTH, height: 36 }}
                               className="flex-shrink-0 relative"
                             >
-                              {weekLabels.map((wl, i) => (
-                                <div
-                                  key={i}
-                                  className="absolute top-0 bottom-0 w-px bg-gray-100"
-                                  style={{ left: wl.x }}
-                                />
-                              ))}
-                              <div
-                                className="absolute top-0 bottom-0 w-0.5 bg-red-100"
-                                style={{ left: todayX }}
-                              />
                               {taskX !== null ? (
                                 <>
-                                  {/* Bar from left to deadline */}
                                   <div
                                     className={`absolute top-1/2 -translate-y-1/2 h-3 rounded-r-full opacity-75 ${colors.bar}`}
                                     style={{ left: 0, width: Math.min(taskX, CHART_WIDTH) }}
                                   />
-                                  {/* Deadline diamond marker */}
                                   <div
                                     className={`absolute w-3 h-3 border-2 border-white shadow-sm z-20 ${colors.marker}`}
                                     style={{
@@ -479,7 +586,6 @@ export default function GanttTimeline({
                                       transform: "translate(-50%, -50%) rotate(45deg)",
                                     }}
                                   />
-                                  {/* Date label */}
                                   <div
                                     className={`absolute top-1/2 -translate-y-1/2 z-20 text-[9px] font-semibold whitespace-nowrap pl-2 ${colors.label}`}
                                     style={{ left: taskX }}
