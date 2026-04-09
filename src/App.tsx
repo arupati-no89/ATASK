@@ -1580,6 +1580,15 @@ export default function App() {
             getDeadlineStatus={getDeadlineStatus}
             sortSettings={timelineSortSettings}
             setSortSettings={setTimelineSortSettings}
+            onTaskClick={(projectId, taskId) => {
+              setSelectedProjectId(projectId);
+              if (taskId) {
+                setExpandedTaskIds((prev) =>
+                  prev.includes(taskId) ? prev : [...prev, taskId]
+                );
+              }
+              setActiveTab("management");
+            }}
           />
         )}
 

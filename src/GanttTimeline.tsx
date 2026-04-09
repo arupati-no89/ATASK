@@ -65,6 +65,7 @@ interface GanttTimelineProps {
   getDeadlineStatus: (deadline: string | undefined, completed: boolean) => string;
   sortSettings: TimelineSortSettings;
   setSortSettings: (settings: TimelineSortSettings) => void;
+  onTaskClick?: (projectId: string, taskId: string) => void;
 }
 
 export default function GanttTimeline({
@@ -76,6 +77,7 @@ export default function GanttTimeline({
   getDeadlineStatus,
   sortSettings,
   setSortSettings,
+  onTaskClick,
 }: GanttTimelineProps) {
   const [showSortSettings, setShowSortSettings] = useState(false);
 
@@ -485,7 +487,10 @@ export default function GanttTimeline({
                             {project.machineNumber}
                           </span>
                         </div>
-                        <p className="text-xs font-semibold text-gray-800 truncate">
+                        <p
+                          className={`text-xs font-semibold text-gray-800 truncate ${onTaskClick ? "cursor-pointer hover:text-emerald-600" : ""}`}
+                          onClick={() => onTaskClick?.(project.id, "")}
+                        >
                           {project.projectName}
                         </p>
                         <div className="flex items-center gap-1.5 mt-1">
@@ -562,8 +567,9 @@ export default function GanttTimeline({
                                 className={`text-xs truncate ${
                                   task.completed
                                     ? "line-through text-gray-400"
-                                    : "text-gray-700"
-                                }`}
+                                    : "text-gray-700 hover:text-emerald-600"
+                                } ${onTaskClick ? "cursor-pointer" : ""}`}
+                                onClick={() => onTaskClick?.(project.id, task.id)}
                               >
                                 {task.title}
                               </span>
