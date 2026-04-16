@@ -1748,7 +1748,7 @@ export default function App() {
                             : ""
                         }`}
                       >
-                        <div className="p-3 md:p-4">
+                        <div className="p-2 md:p-3">
                           <div className="flex justify-between items-start mb-2 gap-2">
                             <div className="flex flex-col min-w-0">
                               <span
@@ -1819,7 +1819,7 @@ export default function App() {
                 <>
                   {/* --- Detail Header Area --- */}
                   <div
-                    className={`p-4 md:p-6 border-b border-gray-100 rounded-t-xl ${
+                    className={`p-3 md:p-4 border-b border-gray-100 rounded-t-xl ${
                       activeTab === "share"
                         ? "bg-white"
                         : currentProject.status === "Completed"
@@ -2063,7 +2063,7 @@ export default function App() {
 
                   {/* --- Task List Area --- */}
                   <div
-                    className={`flex-1 overflow-y-auto p-3 md:p-4 pb-32 md:pb-32 ${
+                    className={`flex-1 overflow-y-auto p-2 md:p-3 pb-16 md:pb-16 ${
                       activeTab === "share"
                         ? "bg-white"
                         : currentProject.status === "Completed"
@@ -2103,7 +2103,7 @@ export default function App() {
                         <p className="text-sm">タスクがまだありません</p>
                       </div>
                     ) : (
-                      <ul className="space-y-3">
+                      <ul className="space-y-1.5 md:space-y-2">
                         {tasks
                           .filter((t) => t.projectId === selectedProjectId)
                           .sort((a, b) => {
@@ -2175,17 +2175,7 @@ export default function App() {
                                           期限: {task.deadline || "-"}
                                         </span>
                                       </div>
-                                      {task.memo && (
-                                        <div className="mt-1 flex items-start gap-1 text-xs text-gray-600">
-                                          <FileText
-                                            size={12}
-                                            className="mt-0.5 flex-shrink-0 text-gray-400"
-                                          />
-                                          <span className="whitespace-pre-wrap">
-                                            {task.memo}
-                                          </span>
-                                        </div>
-                                      )}
+
                                       {relatedSubTasks.length > 0 && (
                                         <ul className="mt-2 ml-0.5 space-y-1.5 border-l-2 border-gray-200 pl-2.5 md:pl-3">
                                           {relatedSubTasks.map((st) => (
@@ -2220,17 +2210,7 @@ export default function App() {
                                                   {st.deadline}
                                                 </span>
                                               </div>
-                                              {st.memo && (
-                                                <div className="ml-4 mt-0.5 flex items-start gap-1 text-[10px] md:text-xs text-gray-500">
-                                                  <FileText
-                                                    size={10}
-                                                    className="mt-0.5 flex-shrink-0 text-gray-400"
-                                                  />
-                                                  <span className="whitespace-pre-wrap">
-                                                    {st.memo}
-                                                  </span>
-                                                </div>
-                                              )}
+
                                             </li>
                                           ))}
                                         </ul>
@@ -2252,7 +2232,7 @@ export default function App() {
                                 }`}
                               >
                                 {/* Task Header */}
-                                <div className="flex items-start gap-2.5 md:gap-3 p-3 hover:bg-gray-50 transition-colors">
+                                <div className="flex items-start gap-2 p-2 hover:bg-gray-50 transition-colors">
                                   <button
                                     onClick={() => toggleTaskExpand(task.id)}
                                     className="text-gray-400 hover:text-emerald-600 transition-colors mt-0.5"
@@ -2346,30 +2326,7 @@ export default function App() {
                                         </span>
                                       )}
                                     </div>
-                                    {/* タスクメモ欄 */}
-                                    <div
-                                      className="mt-1.5 flex items-start gap-1.5 w-full"
-                                      onClick={(e) => e.stopPropagation()}
-                                    >
-                                      <FileText
-                                        size={12}
-                                        className="text-gray-400 mt-0.5 flex-shrink-0"
-                                      />
-                                      <InlineEdit
-                                        type="textarea"
-                                        value={task.memo || ""}
-                                        onSave={(val) =>
-                                          updateTaskMemo(task.id, val)
-                                        }
-                                        className="text-[10px] md:text-xs"
-                                        textClassName="text-[10px] md:text-xs text-gray-500"
-                                        placeholderText="メモを追加..."
-                                        allowEdit={
-                                          currentProject.status !==
-                                            "Completed" && activeTab !== "share"
-                                        }
-                                      />
-                                    </div>
+
                                   </div>
                                   {currentProject.status !== "Completed" && (
                                     <button
@@ -2527,31 +2484,7 @@ export default function App() {
 
                                             {/* Preview / Attachment / Memo Section */}
                                             <div className="ml-6 flex flex-col gap-2 pr-1">
-                                              {/* 新規: サブタスク メモ欄 */}
-                                              <div className="flex items-start gap-1.5 w-full mt-0.5">
-                                                <FileText
-                                                  size={12}
-                                                  className="text-gray-400 mt-0.5 flex-shrink-0"
-                                                />
-                                                <InlineEdit
-                                                  type="textarea"
-                                                  value={subTask.memo || ""}
-                                                  onSave={(val) =>
-                                                    updateSubTaskMemo(
-                                                      subTask.id,
-                                                      val
-                                                    )
-                                                  }
-                                                  className="text-[10px] md:text-xs"
-                                                  textClassName="text-[10px] md:text-xs text-gray-500"
-                                                  placeholderText="メモを追加..."
-                                                  allowEdit={
-                                                    currentProject.status !==
-                                                      "Completed" &&
-                                                    activeTab !== "share"
-                                                  }
-                                                />
-                                              </div>
+
 
                                               {/* Image Preview & Input */}
                                               {(subTask.image ||
