@@ -333,6 +333,21 @@ export default function GanttTimeline({
     wDate.setDate(wDate.getDate() + 7);
   }
 
+  // Weekends
+  const weekendBackgrounds: { x: number; isSaturday: boolean }[] = [];
+  const dWeekend = new Date(chartStart);
+  dWeekend.setHours(0, 0, 0, 0);
+  while (dWeekend <= chartEnd) {
+    const day = dWeekend.getDay();
+    if (day === 0 || day === 6) {
+      weekendBackgrounds.push({
+        x: dateToX(dWeekend),
+        isSaturday: day === 6,
+      });
+    }
+    dWeekend.setDate(dWeekend.getDate() + 1);
+  }
+
   const getBarColors = (deadline: string | undefined, completed: boolean) => {
     if (completed) return { bar: "bg-gray-300", marker: "bg-gray-400", label: "text-gray-400" };
     const s = getDeadlineStatus(deadline, completed);
@@ -530,6 +545,13 @@ export default function GanttTimeline({
                 className="absolute pointer-events-none"
                 style={{ left: LEFT_COL, top: 0, width: CHART_WIDTH, bottom: 0 }}
               >
+                {weekendBackgrounds.map((wb, i) => (
+                  <div
+                    key={`we-${i}`}
+                    className="absolute top-0 bottom-0 bg-gray-200/50"
+                    style={{ left: wb.x, width: PX_PER_DAY }}
+                  />
+                ))}
                 {weekLabels.map((wl, i) => (
                   <div
                     key={i}
