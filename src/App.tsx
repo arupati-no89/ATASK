@@ -1589,6 +1589,7 @@ export default function App() {
               }
               setActiveTab("management");
             }}
+            onTaskDeadlineChange={updateTaskDeadline}
           />
         )}
 

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Calendar, Settings2, Check, RotateCcw } from "lucide-react";
+import { Settings2, Check, RotateCcw } from "lucide-react";
 
 // --- ソートオプション定義 ---
 export interface SortOption {
@@ -54,6 +54,8 @@ interface Task {
   title: string;
   deadline?: string;
   completed: boolean;
+  createdAt?: number;
+  priority?: string;
 }
 
 interface GanttTimelineProps {
@@ -66,6 +68,7 @@ interface GanttTimelineProps {
   sortSettings: TimelineSortSettings;
   setSortSettings: (settings: TimelineSortSettings) => void;
   onTaskClick?: (projectId: string, taskId: string) => void;
+  onTaskDeadlineChange?: (taskId: string, newDateStr: string) => void;
 }
 
 export default function GanttTimeline({
@@ -78,8 +81,24 @@ export default function GanttTimeline({
   sortSettings,
   setSortSettings,
   onTaskClick,
+  onTaskDeadlineChange,
 }: GanttTimelineProps) {
   const [showSortSettings, setShowSortSettings] = useState(false);
+  const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
+  const [dragCurrentX, setDragCurrentX] = useState<number | null>(null);
+  const [viewInterval, setViewInterval] = useState<string>(() => {
+    try {
+      const saved = localStorage.getItem("atask-timeline-view-interval");
+      if (saved) return saved;
+    } catch {}
+    return "auto";
+  });
+
+  React.useEffect(() => {
+    try {
+      localStorage.setItem("atask-timeline-view-interval", viewInterval);
+    } catch {}
+  }, [viewInterval]);
 
   // 表示するソートオプション（設定でフィルタ）
   const visibleOptions = TIMELINE_SORT_OPTIONS.filter((o) =>
@@ -112,6 +131,17 @@ export default function GanttTimeline({
   const countUncompleted = (projectId: string) =>
     tasks.filter((t) => t.projectId === projectId && !t.completed).length;
 
+  const getProjectMaxPriority = (projectId: string) => {
+    const uncompletedTasks = tasks.filter((t) => t.projectId === projectId && !t.completed);
+    const pWeight = { High: 3, Medium: 2, Low: 1 };
+    let max = 0;
+    uncompletedTasks.forEach(t => {
+      const w = pWeight[t.priority as keyof typeof pWeight] || 0;
+      if (w > max) max = w;
+    });
+    return max;
+  };
+
   // Sort projects
   const sortedProjects = [...activeProjects].sort((a, b) => {
     const pa = calculateProgress(a.id);
@@ -123,70 +153,117 @@ export default function GanttTimeline({
     const nb = tb.filter((t) => !t.completed && t.deadline)
       .sort((x, y) => new Date(x.deadline!).getTime() - new Date(y.deadline!).getTime())[0]?.deadline;
 
+    let primaryDiff = 0;
     switch (timelineSortMode) {
       // ---- 日付系 ----
       case "deliveryDate":
-        return (a.deliveryDate ? new Date(a.deliveryDate).getTime() : 9e15)
+        primaryDiff = (a.deliveryDate ? new Date(a.deliveryDate).getTime() : 9e15)
           - (b.deliveryDate ? new Date(b.deliveryDate).getTime() : 9e15);
+        break;
       case "deliveryDateDesc":
-        return (b.deliveryDate ? new Date(b.deliveryDate).getTime() : -9e15)
+        primaryDiff = (b.deliveryDate ? new Date(b.deliveryDate).getTime() : -9e15)
           - (a.deliveryDate ? new Date(a.deliveryDate).getTime() : -9e15);
+        break;
       case "nearestDeadline":
-        return (na ? new Date(na).getTime() : 9e15) - (nb ? new Date(nb).getTime() : 9e15);
+        primaryDiff = (na ? new Date(na).getTime() : 9e15) - (nb ? new Date(nb).getTime() : 9e15);
+        break;
       case "createdAtDesc":
-        return ((b as any).createdAt ?? 0) - ((a as any).createdAt ?? 0);
+        primaryDiff = ((b as any).createdAt ?? 0) - ((a as any).createdAt ?? 0);
+        break;
       case "createdAtAsc":
-        return ((a as any).createdAt ?? 0) - ((b as any).createdAt ?? 0);
+        primaryDiff = ((a as any).createdAt ?? 0) - ((b as any).createdAt ?? 0);
+        break;
       // ---- タスク状況系 ----
       case "overdueFirst":
-        return countOverdue(b.id) - countOverdue(a.id);
+        primaryDiff = countOverdue(b.id) - countOverdue(a.id);
+        break;
       case "urgentFirst":
-        return countUrgent(b.id) - countUrgent(a.id);
+        primaryDiff = countUrgent(b.id) - countUrgent(a.id);
+        break;
       case "uncompletedFirst":
-        return countUncompleted(b.id) - countUncompleted(a.id);
+        primaryDiff = countUncompleted(b.id) - countUncompleted(a.id);
+        break;
       case "progress":
-        return pa - pb;
+        primaryDiff = pa - pb;
+        break;
       case "progressDesc":
-        return pb - pa;
+        primaryDiff = pb - pa;
+        break;
       // ---- 名前系 ----
       case "machineNumber":
-        return (a.machineNumber || "").localeCompare(b.machineNumber || "", "ja");
+        primaryDiff = (a.machineNumber || "").localeCompare(b.machineNumber || "", "ja");
+        break;
       case "projectName":
-        return (a.projectName || "").localeCompare(b.projectName || "", "ja");
+        primaryDiff = (a.projectName || "").localeCompare(b.projectName || "", "ja");
+        break;
       case "customer":
-        return (a.customer || "").localeCompare(b.customer || "", "ja");
+        primaryDiff = (a.customer || "").localeCompare(b.customer || "", "ja");
+        break;
       default:
-        return 0;
+        primaryDiff = 0;
+        break;
     }
+    if (primaryDiff !== 0) return primaryDiff;
+
+    return getProjectMaxPriority(b.id) - getProjectMaxPriority(a.id);
   });
 
   // ---- Gantt chart date range ----
 
   const allDates = [
     ...tasks.filter((t) => t.deadline).map((t) => new Date(t.deadline!)),
+    ...tasks.filter((t) => t.createdAt).map((t) => new Date(t.createdAt!)),
     ...activeProjects.filter((p) => p.deliveryDate).map((p) => new Date(p.deliveryDate!)),
   ];
-  let chartStart = new Date(today);
-  chartStart.setDate(chartStart.getDate() - 21);
-  let chartEnd = new Date(today);
-  chartEnd.setDate(chartEnd.getDate() + 60);
 
-  if (allDates.length > 0) {
-    const minD = new Date(Math.min(...allDates.map((d) => d.getTime())));
-    const maxD = new Date(Math.max(...allDates.map((d) => d.getTime())));
-    if (minD.getTime() < chartStart.getTime()) {
-      chartStart = new Date(minD);
-      chartStart.setDate(chartStart.getDate() - 7);
+  let chartStart = new Date(today);
+  let chartEnd = new Date(today);
+  let PX_PER_DAY = 16;
+
+  if (viewInterval === "auto") {
+    chartStart.setDate(chartStart.getDate() - 21);
+    chartEnd.setDate(chartEnd.getDate() + 60);
+    if (allDates.length > 0) {
+      const minD = new Date(Math.min(...allDates.map((d) => d.getTime())));
+      const maxD = new Date(Math.max(...allDates.map((d) => d.getTime())));
+      if (minD.getTime() < chartStart.getTime()) {
+        chartStart = new Date(minD);
+        chartStart.setDate(chartStart.getDate() - 7);
+      }
+      if (maxD.getTime() > chartEnd.getTime()) {
+        chartEnd = new Date(maxD);
+        chartEnd.setDate(chartEnd.getDate() + 14);
+      }
     }
-    if (maxD.getTime() > chartEnd.getTime()) {
-      chartEnd = new Date(maxD);
-      chartEnd.setDate(chartEnd.getDate() + 14);
-    }
+    PX_PER_DAY = 16;
+  } else if (viewInterval === "1week") {
+    chartStart.setDate(chartStart.getDate() - 2);
+    chartEnd.setDate(chartEnd.getDate() + 7);
+    PX_PER_DAY = 60;
+  } else if (viewInterval === "1month") {
+    chartStart.setDate(chartStart.getDate() - 7);
+    chartEnd.setDate(chartEnd.getDate() + 31);
+    PX_PER_DAY = 30;
+  } else if (viewInterval === "3months") {
+    chartStart.setDate(chartStart.getDate() - 14);
+    chartEnd.setDate(chartEnd.getDate() + 90);
+    PX_PER_DAY = 16;
+  } else if (viewInterval === "6months") {
+    chartStart.setDate(chartStart.getDate() - 30);
+    chartEnd.setDate(chartEnd.getDate() + 180);
+    PX_PER_DAY = 10;
+  } else if (viewInterval === "1year") {
+    chartStart.setDate(chartStart.getDate() - 30);
+    chartEnd.setDate(chartEnd.getDate() + 365);
+    PX_PER_DAY = 5;
+  } else if (viewInterval === "2years") {
+    chartStart.setDate(chartStart.getDate() - 60);
+    chartEnd.setDate(chartEnd.getDate() + 730);
+    PX_PER_DAY = 3;
   }
 
   const totalMs = chartEnd.getTime() - chartStart.getTime();
   const totalDays = Math.ceil(totalMs / (1000 * 60 * 60 * 24));
-  const PX_PER_DAY = 16;
   const CHART_WIDTH = totalDays * PX_PER_DAY;
   const LEFT_COL = 180;
 
@@ -194,6 +271,38 @@ export default function GanttTimeline({
     const date = typeof d === "string" ? new Date(d) : new Date(d);
     date.setHours(0, 0, 0, 0);
     return Math.max(0, ((date.getTime() - chartStart.getTime()) / totalMs) * CHART_WIDTH);
+  };
+
+  const xToDate = (x: number): string => {
+    const ms = (x / CHART_WIDTH) * totalMs;
+    const d = new Date(chartStart.getTime() + ms);
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
+  const handlePointerDown = (e: React.PointerEvent, taskId: string, initialX: number) => {
+    if (!onTaskDeadlineChange) return;
+    (e.currentTarget as Element).setPointerCapture(e.pointerId);
+    setDraggingTaskId(taskId);
+    setDragCurrentX(initialX);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (draggingTaskId !== null && dragCurrentX !== null) {
+      setDragCurrentX((prev) => Math.max(0, Math.min(CHART_WIDTH, (prev as number) + e.movementX)));
+    }
+  };
+
+  const handlePointerUp = (e: React.PointerEvent, taskId: string) => {
+    (e.currentTarget as Element).releasePointerCapture(e.pointerId);
+    if (draggingTaskId === taskId && dragCurrentX !== null && onTaskDeadlineChange) {
+      const newDateStr = xToDate(dragCurrentX);
+      onTaskDeadlineChange(taskId, newDateStr);
+      setDraggingTaskId(null);
+      setDragCurrentX(null);
+    }
   };
 
   const todayX = dateToX(today);
@@ -243,6 +352,22 @@ export default function GanttTimeline({
           <p className="text-sm text-gray-500">全プロジェクトの Gantt チャート</p>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="flex items-center gap-2 text-xs md:text-sm bg-white border border-gray-200 rounded-lg px-3 py-2 shadow-sm">
+            <span className="text-gray-500 font-medium whitespace-nowrap">表示期間:</span>
+            <select
+              value={viewInterval}
+              onChange={(e) => setViewInterval(e.target.value)}
+              className="border-0 bg-transparent focus:outline-none font-semibold text-emerald-700 cursor-pointer"
+            >
+              <option value="auto">自動 (全体)</option>
+              <option value="1week">1週間</option>
+              <option value="1month">1か月</option>
+              <option value="3months">3か月</option>
+              <option value="6months">6か月</option>
+              <option value="1year">1年</option>
+              <option value="2years">2年</option>
+            </select>
+          </div>
           <div className="flex items-center gap-2 text-xs md:text-sm bg-white border border-gray-200 rounded-lg px-3 py-2 shadow-sm">
             <span className="text-gray-500 font-medium whitespace-nowrap">並び順:</span>
             <select
@@ -468,6 +593,10 @@ export default function GanttTimeline({
                   .filter((t) => t.projectId === project.id)
                   .sort((a, b) => {
                     if (a.completed !== b.completed) return a.completed ? 1 : -1;
+                    const pWeight = { High: 3, Medium: 2, Low: 1 };
+                    const pwA = pWeight[a.priority as keyof typeof pWeight] || 0;
+                    const pwB = pWeight[b.priority as keyof typeof pWeight] || 0;
+                    if (pwA !== pwB) return pwB - pwA;
                     return (
                       (a.deadline ? new Date(a.deadline).getTime() : 9e15) -
                       (b.deadline ? new Date(b.deadline).getTime() : 9e15)
@@ -547,6 +676,10 @@ export default function GanttTimeline({
                       projectTasks.map((task) => {
                         const colors = getBarColors(task.deadline, task.completed);
                         const taskX = task.deadline ? dateToX(task.deadline) : null;
+                        const startX = task.createdAt ? dateToX(new Date(task.createdAt)) : 0;
+                        const isDragging = draggingTaskId === task.id;
+                        const displayX = isDragging && dragCurrentX !== null ? dragCurrentX : taskX;
+
                         return (
                           <div
                             key={task.id}
@@ -578,25 +711,30 @@ export default function GanttTimeline({
                               style={{ width: CHART_WIDTH, minWidth: CHART_WIDTH, height: 36 }}
                               className="flex-shrink-0 relative"
                             >
-                              {taskX !== null ? (
+                              {displayX !== null ? (
                                 <>
                                   <div
-                                    className={`absolute top-1/2 -translate-y-1/2 h-3 rounded-r-full opacity-75 ${colors.bar}`}
-                                    style={{ left: 0, width: Math.min(taskX, CHART_WIDTH) }}
+                                    className={`absolute top-1/2 -translate-y-1/2 h-3 rounded-full opacity-75 ${colors.bar}`}
+                                    style={{ left: startX, width: Math.max(0, displayX - startX) }}
                                   />
                                   <div
-                                    className={`absolute w-3 h-3 border-2 border-white shadow-sm z-20 ${colors.marker}`}
+                                    className={`absolute w-4 h-4 border-2 border-white shadow-sm z-20 cursor-ew-resize transition-transform ${isDragging ? 'scale-125' : ''} ${colors.marker}`}
                                     style={{
-                                      left: taskX,
+                                      left: displayX,
                                       top: "50%",
                                       transform: "translate(-50%, -50%) rotate(45deg)",
+                                      touchAction: "none"
                                     }}
+                                    onPointerDown={(e) => handlePointerDown(e, task.id, displayX)}
+                                    onPointerMove={handlePointerMove}
+                                    onPointerUp={(e) => handlePointerUp(e, task.id)}
+                                    onPointerCancel={(e) => handlePointerUp(e, task.id)}
                                   />
                                   <div
-                                    className={`absolute top-1/2 -translate-y-1/2 z-20 text-[9px] font-semibold whitespace-nowrap pl-2 ${colors.label}`}
-                                    style={{ left: taskX }}
+                                    className={`absolute top-1/2 -translate-y-1/2 z-20 text-[9px] font-semibold whitespace-nowrap pl-2 pointer-events-none ${colors.label}`}
+                                    style={{ left: displayX }}
                                   >
-                                    {task.deadline?.slice(5)}
+                                    {isDragging && dragCurrentX !== null ? xToDate(dragCurrentX).slice(5) : task.deadline?.slice(5)}
                                   </div>
                                 </>
                               ) : (
