@@ -261,17 +261,12 @@ export default function GanttTimeline({
       }
     }
     
-    // 表示期間に応じてPX_PER_DAYを調整し、スライドバーが長くなりすぎるのを防ぐ
+    // 表示期間に応じて横幅が約1000pxに収まるようにPX_PER_DAYを逆算する
     const tempTotalDays = Math.ceil((chartEnd.getTime() - chartStart.getTime()) / (1000 * 60 * 60 * 24));
-    if (tempTotalDays > 730) {
-      PX_PER_DAY = 3;
-    } else if (tempTotalDays > 365) {
-      PX_PER_DAY = 5;
-    } else if (tempTotalDays > 180) {
-      PX_PER_DAY = 10;
-    } else {
-      PX_PER_DAY = 16;
-    }
+    let calcPx = 1000 / tempTotalDays;
+    if (calcPx > 16) calcPx = 16;
+    if (calcPx < 1.5) calcPx = 1.5;
+    PX_PER_DAY = calcPx;
   } else if (viewInterval === "1week") {
     chartStart.setDate(chartStart.getDate() - 2);
     chartEnd.setDate(chartEnd.getDate() + 7);
@@ -581,14 +576,14 @@ export default function GanttTimeline({
                 className="absolute pointer-events-none"
                 style={{ left: LEFT_COL, top: 0, width: CHART_WIDTH, bottom: 0 }}
               >
-                {weekendBackgrounds.map((wb, i) => (
+                {PX_PER_DAY >= 5 && weekendBackgrounds.map((wb, i) => (
                   <div
                     key={`we-${i}`}
                     className="absolute top-0 bottom-0 bg-gray-200/50"
                     style={{ left: wb.x, width: PX_PER_DAY }}
                   />
                 ))}
-                {weekLabels.map((wl, i) => (
+                {PX_PER_DAY >= 5 && weekLabels.map((wl, i) => (
                   <div
                     key={i}
                     className="absolute top-0 bottom-0 w-px bg-gray-100"
@@ -621,10 +616,10 @@ export default function GanttTimeline({
                       className="absolute top-0 text-xs font-bold text-gray-700 whitespace-nowrap px-2 pt-1.5 border-l-2 border-gray-300"
                       style={{ left: ml.x }}
                     >
-                      {ml.label}
+                      {PX_PER_DAY < 3 ? ml.label.replace(/.*年/, "") : ml.label}
                     </div>
                   ))}
-                  {weekLabels.map((wl, i) => (
+                  {PX_PER_DAY >= 5 && weekLabels.map((wl, i) => (
                     <div
                       key={i}
                       className="absolute bottom-1 text-[10px] text-gray-400 whitespace-nowrap"
