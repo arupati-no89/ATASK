@@ -210,11 +210,26 @@ export default function GanttTimeline({
 
   // ---- Gantt chart date range ----
 
-  const allDates = [
-    ...tasks.filter((t) => t.deadline).map((t) => new Date(t.deadline!)),
-    ...tasks.filter((t) => t.createdAt).map((t) => new Date(t.createdAt!)),
-    ...activeProjects.filter((p) => p.deliveryDate).map((p) => new Date(p.deliveryDate!)),
-  ];
+  const activeProjectIds = new Set(activeProjects.map((p) => p.id));
+  const activeTasks = tasks.filter((t) => activeProjectIds.has(t.projectId));
+
+  const validDates: number[] = [];
+  activeTasks.forEach((t) => {
+    if (t.deadline) {
+      const d = new Date(t.deadline).getTime();
+      if (!isNaN(d)) validDates.push(d);
+    }
+    if (t.createdAt) {
+      const d = new Date(t.createdAt).getTime();
+      if (!isNaN(d)) validDates.push(d);
+    }
+  });
+  activeProjects.forEach((p) => {
+    if (p.deliveryDate) {
+      const d = new Date(p.deliveryDate).getTime();
+      if (!isNaN(d)) validDates.push(d);
+    }
+  });
 
   let chartStart = new Date(today);
   let chartEnd = new Date(today);
@@ -223,19 +238,40 @@ export default function GanttTimeline({
   if (viewInterval === "auto") {
     chartStart.setDate(chartStart.getDate() - 21);
     chartEnd.setDate(chartEnd.getDate() + 60);
-    if (allDates.length > 0) {
-      const minD = new Date(Math.min(...allDates.map((d) => d.getTime())));
-      const maxD = new Date(Math.max(...allDates.map((d) => d.getTime())));
-      if (minD.getTime() < chartStart.getTime()) {
-        chartStart = new Date(minD);
+    if (validDates.length > 0) {
+      const minD = new Date(Math.min(...validDates));
+      const maxD = new Date(Math.max(...validDates));
+      
+      // 極端な日付（入力ミス等）によるスクロールバーの肥大化を防ぐため、auto時の最大範囲を制限
+      const maxPast = new Date(today);
+      maxPast.setFullYear(maxPast.getFullYear() - 1);
+      const maxFuture = new Date(today);
+      maxFuture.setFullYear(maxFuture.getFullYear() + 2);
+
+      const boundedMin = new Date(Math.max(minD.getTime(), maxPast.getTime()));
+      const boundedMax = new Date(Math.min(maxD.getTime(), maxFuture.getTime()));
+
+      if (boundedMin.getTime() < chartStart.getTime()) {
+        chartStart = new Date(boundedMin);
         chartStart.setDate(chartStart.getDate() - 7);
       }
-      if (maxD.getTime() > chartEnd.getTime()) {
-        chartEnd = new Date(maxD);
+      if (boundedMax.getTime() > chartEnd.getTime()) {
+        chartEnd = new Date(boundedMax);
         chartEnd.setDate(chartEnd.getDate() + 14);
       }
     }
-    PX_PER_DAY = 16;
+    
+    // 表示期間に応じてPX_PER_DAYを調整し、スライドバーが長くなりすぎるのを防ぐ
+    const tempTotalDays = Math.ceil((chartEnd.getTime() - chartStart.getTime()) / (1000 * 60 * 60 * 24));
+    if (tempTotalDays > 730) {
+      PX_PER_DAY = 3;
+    } else if (tempTotalDays > 365) {
+      PX_PER_DAY = 5;
+    } else if (tempTotalDays > 180) {
+      PX_PER_DAY = 10;
+    } else {
+      PX_PER_DAY = 16;
+    }
   } else if (viewInterval === "1week") {
     chartStart.setDate(chartStart.getDate() - 2);
     chartEnd.setDate(chartEnd.getDate() + 7);
