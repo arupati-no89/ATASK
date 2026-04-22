@@ -388,17 +388,41 @@ export default function GanttTimeline({
   };
 
   return (
-    <div className="h-full flex flex-col gap-4">
+    <div className="h-full flex flex-col gap-2">
       {/* Header */}
-      <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 flex-shrink-0">
-        <div>
-          <h2 className="text-xl md:text-2xl font-bold text-gray-900">
-            タイムライン (工程表)
-          </h2>
-          <p className="text-sm text-gray-500">全プロジェクトの Gantt チャート</p>
+      <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 flex-shrink-0">
+        <div className="flex flex-col gap-1">
+          <div className="flex items-baseline gap-2">
+            <h2 className="text-lg md:text-xl font-bold text-gray-900">
+              タイムライン
+            </h2>
+            <p className="text-xs text-gray-500 hidden sm:block">全プロジェクトの Gantt チャート</p>
+          </div>
+          {/* Legend */}
+          <div className="flex flex-wrap items-center gap-3 text-[10px] flex-shrink-0">
+            {[
+              { c: "bg-emerald-500", l: "通常" },
+              { c: "bg-amber-500", l: "3日以内" },
+              { c: "bg-red-500", l: "期限切れ" },
+              { c: "bg-gray-400", l: "完了" },
+            ].map(({ c, l }) => (
+              <div key={l} className="flex items-center gap-1">
+                <div className={`w-2 h-2 rounded-full ${c}`} />
+                <span className="text-gray-500">{l}</span>
+              </div>
+            ))}
+            <div className="flex items-center gap-1">
+              <div className="w-0.5 h-3 bg-red-400" />
+              <span className="text-gray-500">TODAY</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="w-2 h-2 rotate-45 bg-teal-600" />
+              <span className="text-gray-500">納入日</span>
+            </div>
+          </div>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
-          <div className="flex items-center gap-2 text-xs md:text-sm bg-white border border-gray-200 rounded-lg px-3 py-2 shadow-sm">
+          <div className="flex items-center gap-1 text-xs bg-white border border-gray-200 rounded-md px-2 py-1 shadow-sm">
             <span className="text-gray-500 font-medium whitespace-nowrap">表示期間:</span>
             <select
               value={viewInterval}
@@ -414,7 +438,7 @@ export default function GanttTimeline({
               <option value="2years">2年</option>
             </select>
           </div>
-          <div className="flex items-center gap-2 text-xs md:text-sm bg-white border border-gray-200 rounded-lg px-3 py-2 shadow-sm">
+          <div className="flex items-center gap-1 text-xs bg-white border border-gray-200 rounded-md px-2 py-1 shadow-sm">
             <span className="text-gray-500 font-medium whitespace-nowrap">並び順:</span>
             <select
               value={timelineSortMode}
@@ -436,14 +460,14 @@ export default function GanttTimeline({
           </div>
           <button
             onClick={() => setShowSortSettings(!showSortSettings)}
-            className={`p-2 rounded-lg border transition-colors ${
+            className={`p-1.5 rounded-md border transition-colors ${
               showSortSettings
                 ? "bg-emerald-50 border-emerald-300 text-emerald-700"
                 : "bg-white border-gray-200 text-gray-500 hover:text-emerald-600 hover:border-emerald-200"
             }`}
             title="ソート設定"
           >
-            <Settings2 size={16} />
+            <Settings2 size={14} />
           </button>
         </div>
       </header>
@@ -538,28 +562,7 @@ export default function GanttTimeline({
         </div>
       )}
 
-      {/* Legend */}
-      <div className="flex flex-wrap items-center gap-4 text-[10px] md:text-xs flex-shrink-0 bg-white px-3 py-2 rounded-lg border border-gray-100 shadow-sm">
-        {[
-          { c: "bg-emerald-500", l: "通常" },
-          { c: "bg-amber-500", l: "3日以内" },
-          { c: "bg-red-500", l: "期限切れ" },
-          { c: "bg-gray-400", l: "完了" },
-        ].map(({ c, l }) => (
-          <div key={l} className="flex items-center gap-1">
-            <div className={`w-3 h-3 rounded-full ${c}`} />
-            <span className="text-gray-600">{l}</span>
-          </div>
-        ))}
-        <div className="flex items-center gap-1">
-          <div className="w-0.5 h-4 bg-red-400" />
-          <span className="text-gray-600">TODAY</span>
-        </div>
-        <div className="flex items-center gap-1">
-          <div className="w-3 h-3 rotate-45 bg-teal-600" />
-          <span className="text-gray-600">納入日</span>
-        </div>
-      </div>
+      {/* Legend removed and integrated into Header */}
 
       {/* Gantt chart body */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 flex-1 overflow-hidden flex flex-col min-h-0">
@@ -600,7 +603,7 @@ export default function GanttTimeline({
               <div className="flex sticky top-0 z-30 bg-gray-50 border-b-2 border-gray-300 shadow-sm">
                 <div
                   style={{ width: LEFT_COL, minWidth: LEFT_COL }}
-                  className="flex-shrink-0 sticky left-0 z-40 bg-gray-50 border-r-2 border-gray-300 h-14 flex items-end px-3 pb-2"
+                  className="flex-shrink-0 sticky left-0 z-40 bg-gray-50 border-r-2 border-gray-300 h-10 flex items-end px-2 pb-1"
                 >
                   <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">
                     工事 / タスク
@@ -608,12 +611,12 @@ export default function GanttTimeline({
                 </div>
                 <div
                   style={{ width: CHART_WIDTH, minWidth: CHART_WIDTH }}
-                  className="flex-shrink-0 h-14 relative"
+                  className="flex-shrink-0 h-10 relative"
                 >
                   {monthLabels.map((ml, i) => (
                     <div
                       key={i}
-                      className="absolute top-0 text-xs font-bold text-gray-700 whitespace-nowrap px-2 pt-1.5 border-l-2 border-gray-300"
+                      className="absolute top-0 text-xs font-bold text-gray-700 whitespace-nowrap px-2 pt-1 border-l-2 border-gray-300 h-full"
                       style={{ left: ml.x }}
                     >
                       {PX_PER_DAY < 3 ? ml.label.replace(/.*年/, "") : ml.label}
@@ -622,7 +625,7 @@ export default function GanttTimeline({
                   {PX_PER_DAY >= 5 && weekLabels.map((wl, i) => (
                     <div
                       key={i}
-                      className="absolute bottom-1 text-[10px] text-gray-400 whitespace-nowrap"
+                      className="absolute bottom-0.5 text-[9px] text-gray-400 whitespace-nowrap"
                       style={{ left: wl.x, transform: "translateX(-50%)" }}
                     >
                       {wl.label}
@@ -632,7 +635,7 @@ export default function GanttTimeline({
                     className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-20"
                     style={{ left: todayX }}
                   >
-                    <span className="absolute top-0 left-1 text-[9px] text-red-500 font-bold">
+                    <span className="absolute top-0 left-1 text-[8px] text-red-500 font-bold leading-none mt-0.5">
                       TODAY
                     </span>
                   </div>
@@ -662,33 +665,33 @@ export default function GanttTimeline({
                     <div className="flex bg-emerald-50/80 border-b border-emerald-200">
                       <div
                         style={{ width: LEFT_COL, minWidth: LEFT_COL }}
-                        className="flex-shrink-0 sticky left-0 z-20 bg-emerald-50 border-r border-emerald-200 px-3 py-2"
+                        className="flex-shrink-0 sticky left-0 z-20 bg-emerald-50 border-r border-emerald-200 px-2 py-1.5"
                       >
-                        <div className="flex items-center gap-1.5 mb-0.5">
-                          <span className="text-[10px] font-bold text-emerald-800 bg-white border border-emerald-300 px-1.5 py-0.5 rounded">
+                        <div className="flex items-center gap-1 mb-0.5">
+                          <span className="text-[9px] font-bold text-emerald-800 bg-white border border-emerald-300 px-1 py-0.5 rounded leading-none">
                             {project.machineNumber}
                           </span>
+                          <span className="text-[9px] font-bold text-emerald-700 leading-none ml-auto">{progress}%</span>
                         </div>
                         <p
-                          className={`text-xs font-semibold text-gray-800 truncate ${onTaskClick ? "cursor-pointer hover:text-emerald-600" : ""}`}
+                          className={`text-xs font-semibold text-gray-800 truncate leading-tight ${onTaskClick ? "cursor-pointer hover:text-emerald-600" : ""}`}
                           onClick={() => onTaskClick?.(project.id, "")}
                         >
                           {project.projectName}
                         </p>
-                        <div className="flex items-center gap-1.5 mt-1">
-                          <div className="flex-1 bg-white rounded-full h-1.5 border border-emerald-200">
+                        <div className="flex items-center mt-1">
+                          <div className="flex-1 bg-white rounded-full h-1 border border-emerald-200">
                             <div
-                              className={`h-1.5 rounded-full ${
+                              className={`h-1 rounded-full ${
                                 progress === 100 ? "bg-emerald-500" : "bg-teal-400"
                               }`}
                               style={{ width: `${progress}%` }}
                             />
                           </div>
-                          <span className="text-[10px] font-bold text-emerald-700">{progress}%</span>
                         </div>
                       </div>
                       <div
-                        style={{ width: CHART_WIDTH, minWidth: CHART_WIDTH, height: 56 }}
+                        style={{ width: CHART_WIDTH, minWidth: CHART_WIDTH, height: 44 }}
                         className="flex-shrink-0 relative"
                       >
                         {project.deliveryDate && (
@@ -700,14 +703,14 @@ export default function GanttTimeline({
                               transform: "translate(-50%, -50%)",
                             }}
                           >
-                            <div className="w-4 h-4 rotate-45 bg-teal-600 border-2 border-white shadow-md" />
-                            <span className="text-[9px] text-teal-800 font-bold whitespace-nowrap mt-0.5 bg-white/90 px-1 rounded shadow-sm">
-                              {project.deliveryDate}
+                            <div className="w-3 h-3 rotate-45 bg-teal-600 border-2 border-white shadow-sm" />
+                            <span className="text-[8px] text-teal-800 font-bold whitespace-nowrap mt-0.5 bg-white/90 px-1 rounded shadow-sm leading-none">
+                              {project.deliveryDate.slice(5)}
                             </span>
                           </div>
                         )}
                         {project.customer && (
-                          <div className="absolute left-2 bottom-1 text-[9px] text-emerald-600 font-medium">
+                          <div className="absolute left-2 bottom-0.5 text-[8px] text-emerald-600 font-medium">
                             {project.customer}
                           </div>
                         )}
@@ -719,11 +722,11 @@ export default function GanttTimeline({
                       <div className="flex border-b border-gray-100">
                         <div
                           style={{ width: LEFT_COL, minWidth: LEFT_COL }}
-                          className="flex-shrink-0 sticky left-0 bg-white border-r border-gray-100 px-3 h-8 flex items-center text-xs text-gray-300 italic"
+                          className="flex-shrink-0 sticky left-0 bg-white border-r border-gray-100 px-2 h-6 flex items-center text-xs text-gray-300 italic"
                         >
                           タスクなし
                         </div>
-                        <div style={{ width: CHART_WIDTH, minWidth: CHART_WIDTH, height: 32 }} className="flex-shrink-0" />
+                        <div style={{ width: CHART_WIDTH, minWidth: CHART_WIDTH, height: 24 }} className="flex-shrink-0" />
                       </div>
                     ) : (
                       projectTasks.map((task) => {
@@ -740,17 +743,17 @@ export default function GanttTimeline({
                           >
                             <div
                               style={{ width: LEFT_COL, minWidth: LEFT_COL }}
-                              className={`flex-shrink-0 sticky left-0 z-10 border-r border-gray-100 px-3 h-9 flex items-center gap-1.5 ${
+                              className={`flex-shrink-0 sticky left-0 z-10 border-r border-gray-100 px-2 h-7 flex items-center gap-1.5 ${
                                 task.completed ? "bg-gray-50" : "bg-white"
                               }`}
                             >
                               <span
-                                className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                                className={`w-1 h-1 rounded-full flex-shrink-0 ${
                                   task.completed ? "bg-emerald-400" : "bg-gray-300"
                                 }`}
                               />
                               <span
-                                className={`text-xs truncate ${
+                                className={`text-[11px] truncate ${
                                   task.completed
                                     ? "line-through text-gray-400"
                                     : "text-gray-700 hover:text-emerald-600"
@@ -761,17 +764,17 @@ export default function GanttTimeline({
                               </span>
                             </div>
                             <div
-                              style={{ width: CHART_WIDTH, minWidth: CHART_WIDTH, height: 36 }}
+                              style={{ width: CHART_WIDTH, minWidth: CHART_WIDTH, height: 28 }}
                               className="flex-shrink-0 relative"
                             >
                               {displayX !== null ? (
                                 <>
                                   <div
-                                    className={`absolute top-1/2 -translate-y-1/2 h-3 rounded-full opacity-75 ${colors.bar}`}
+                                    className={`absolute top-1/2 -translate-y-1/2 h-2.5 rounded-full opacity-75 ${colors.bar}`}
                                     style={{ left: startX, width: Math.max(0, displayX - startX) }}
                                   />
                                   <div
-                                    className={`absolute w-4 h-4 border-2 border-white shadow-sm z-20 cursor-ew-resize transition-transform ${isDragging ? 'scale-125' : ''} ${colors.marker}`}
+                                    className={`absolute w-3.5 h-3.5 border-2 border-white shadow-sm z-20 cursor-ew-resize transition-transform ${isDragging ? 'scale-125' : ''} ${colors.marker}`}
                                     style={{
                                       left: displayX,
                                       top: "50%",
@@ -784,14 +787,14 @@ export default function GanttTimeline({
                                     onPointerCancel={(e) => handlePointerUp(e, task.id)}
                                   />
                                   <div
-                                    className={`absolute top-1/2 -translate-y-1/2 z-20 text-[9px] font-semibold whitespace-nowrap pl-2 pointer-events-none ${colors.label}`}
+                                    className={`absolute top-1/2 -translate-y-1/2 z-20 text-[8px] font-semibold whitespace-nowrap pl-2 pointer-events-none ${colors.label}`}
                                     style={{ left: displayX }}
                                   >
                                     {isDragging && dragCurrentX !== null ? xToDate(dragCurrentX).slice(5) : task.deadline?.slice(5)}
                                   </div>
                                 </>
                               ) : (
-                                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-[10px] text-gray-300 italic">
+                                <div className="absolute left-2 top-1/2 -translate-y-1/2 text-[9px] text-gray-300 italic">
                                   期限未設定
                                 </div>
                               )}
