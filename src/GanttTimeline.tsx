@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { Settings2, Check, RotateCcw } from "lucide-react";
 
 // --- ソートオプション定義 ---
@@ -85,6 +85,8 @@ export default function GanttTimeline({
 }: GanttTimelineProps) {
   const [showSortSettings, setShowSortSettings] = useState(false);
   const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const todayXRef = useRef(0);
   const [dragCurrentX, setDragCurrentX] = useState<number | null>(null);
   const [viewInterval, setViewInterval] = useState<string>(() => {
     try {
@@ -219,10 +221,7 @@ export default function GanttTimeline({
       const d = new Date(t.deadline).getTime();
       if (!isNaN(d)) validDates.push(d);
     }
-    if (t.createdAt) {
-      const d = new Date(t.createdAt).getTime();
-      if (!isNaN(d)) validDates.push(d);
-    }
+    // createdAt は範囲計算に含めない（バー描画には使用するが、古い日付で範囲が広がるのを防ぐ）
   });
   activeProjects.forEach((p) => {
     if (p.deliveryDate) {
@@ -244,9 +243,9 @@ export default function GanttTimeline({
       
       // 極端な日付（入力ミス等）によるスクロールバーの肥大化を防ぐため、auto時の最大範囲を制限
       const maxPast = new Date(today);
-      maxPast.setFullYear(maxPast.getFullYear() - 1);
+      maxPast.setMonth(maxPast.getMonth() - 6); // 過去は最大6ヶ月まで
       const maxFuture = new Date(today);
-      maxFuture.setFullYear(maxFuture.getFullYear() + 2);
+      maxFuture.setFullYear(maxFuture.getFullYear() + 1); // 未来は最大1年まで
 
       const boundedMin = new Date(Math.max(minD.getTime(), maxPast.getTime()));
       const boundedMax = new Date(Math.min(maxD.getTime(), maxFuture.getTime()));
@@ -337,6 +336,16 @@ export default function GanttTimeline({
   };
 
   const todayX = dateToX(today);
+  todayXRef.current = todayX;
+
+  // viewInterval 変更時（および初回マウント時）に今日の位置へ自動スクロール
+  useEffect(() => {
+    if (scrollContainerRef.current) {
+      const containerWidth = scrollContainerRef.current.clientWidth;
+      scrollContainerRef.current.scrollLeft = Math.max(0, todayXRef.current - containerWidth / 4);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewInterval]);
 
   // Month labels
   const monthLabels: { label: string; x: number }[] = [];
@@ -571,7 +580,7 @@ export default function GanttTimeline({
             進行中のプロジェクトはありません。
           </div>
         ) : (
-          <div className="overflow-auto flex-1">
+          <div ref={scrollContainerRef} className="overflow-auto flex-1">
             <div style={{ minWidth: LEFT_COL + CHART_WIDTH }} className="relative">
 
               {/* Grid overlay — rendered ONCE for the entire chart */}
