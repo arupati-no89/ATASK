@@ -72,6 +72,13 @@ import {
   query,
   writeBatch,
 } from "firebase/firestore";
+import {
+  getStorage,
+  ref as storageRefFn,
+  uploadBytes,
+  getDownloadURL,
+  deleteObject,
+} from "firebase/storage";
 
 // --- アプリのパスワード設定 ---
 const APP_PASSWORD = "atask";
@@ -199,6 +206,7 @@ export default function App() {
   // --- Firebase Configuration & Initialization ---
   const [user, setUser] = useState(null);
   const [db, setDb] = useState(null);
+  const [storage, setStorage] = useState(null);
   const [appId, setAppId] = useState(null);
   const [authError, setAuthError] = useState(null);
 
@@ -237,6 +245,7 @@ export default function App() {
       const auth = getAuth(app);
       const firestore = getFirestore(app);
       setDb(firestore);
+      setStorage(getStorage(app));
 
       const currentAppId =
         typeof __app_id !== "undefined" ? __app_id : "my-a-task-app";
@@ -808,37 +817,61 @@ export default function App() {
     setNewSubTaskTitles({ ...newSubTaskTitles, [taskId]: "" });
   };
 
-  const handleImageUpload = (e, subTaskId) => {
+  // アップロード許容サイズの上限（Firebase Storage 保存。base64ではないので大きめでOK）
+  const MAX_UPLOAD_BYTES = 20 * 1024 * 1024; // 20MB
+
+  // 画像をFirebase Storageにアップロードし、ダウンロードURLを返す
+  const uploadImageToStorage = async (file, folder, id) => {
+    const safeName = file.name.replace(/[\\/]/g, "_");
+    const path = `artifacts/${appId}/${folder}/${id}/${Date.now()}_${safeName}`;
+    const fileRef = storageRefFn(storage, path);
+    await uploadBytes(fileRef, file);
+    return await getDownloadURL(fileRef);
+  };
+
+  // 値がStorageのURLならStorage実体も削除する（旧base64データURIはスキップ）
+  const deleteStorageFileIfNeeded = async (value) => {
+    if (!storage || !value || typeof value !== "string") return;
+    if (!value.startsWith("https://")) return; // 旧base64(data URI)等は対象外
+    try {
+      await deleteObject(storageRefFn(storage, value));
+    } catch (error) {
+      // 既に存在しない/権限等。フィールドのクリア自体は継続させる
+      console.warn("Storageファイルの削除をスキップ:", error);
+    }
+  };
+
+  const handleImageUpload = async (e, subTaskId) => {
     const file = e.target.files[0];
     if (file) {
-      if (file.size > 900 * 1024) {
-        alert(
-          "ファイルサイズが大きすぎます。1MB以下の画像を使用してください。"
-        );
+      if (file.size > MAX_UPLOAD_BYTES) {
+        alert("ファイルサイズが大きすぎます。20MB以下の画像を使用してください。");
+        e.target.value = "";
         return;
       }
-      const reader = new FileReader();
-      reader.onloadend = async () => {
-        const base64String = reader.result;
-        try {
-          const subTaskRef = doc(
-            db,
-            "artifacts",
-            appId,
-            "public",
-            "data",
-            "subTasks",
-            subTaskId
-          );
-          await updateDoc(subTaskRef, { image: base64String });
-          setAttachmentMode((prev) => ({ ...prev, [subTaskId]: null }));
-        } catch (error) {
-          console.error("Error saving image:", error);
-          alert("画像の保存に失敗しました。");
-        }
-      };
-      reader.readAsDataURL(file);
+      try {
+        const url = await uploadImageToStorage(file, "subTaskImages", subTaskId);
+        const subTaskRef = doc(
+          db,
+          "artifacts",
+          appId,
+          "public",
+          "data",
+          "subTasks",
+          subTaskId
+        );
+        const prevSt = subTasks.find((s) => s.id === subTaskId);
+        await updateDoc(subTaskRef, { image: url });
+        // 差し替え時、旧画像がStorageにあれば削除（ゴミ防止）
+        if (prevSt) await deleteStorageFileIfNeeded(prevSt.image);
+        setAttachmentMode((prev) => ({ ...prev, [subTaskId]: null }));
+      } catch (error) {
+        console.error("Error saving image:", error);
+        alert("画像の保存に失敗しました。");
+      }
     }
+    // 同じファイルを再選択できるよう入力値をリセット
+    e.target.value = "";
   };
 
   const saveLinkToFirestore = async (subTaskId, linkValue) => {
@@ -968,6 +1001,7 @@ export default function App() {
 
   const deleteImage = async (subTaskId) => {
     if (!user) return;
+    const st = subTasks.find((s) => s.id === subTaskId);
     const subTaskRef = doc(
       db,
       "artifacts",
@@ -978,38 +1012,37 @@ export default function App() {
       subTaskId
     );
     await updateDoc(subTaskRef, { image: null });
+    if (st) await deleteStorageFileIfNeeded(st.image);
   };
 
   // 工事案件（機番）に紐づくライン図（組立承認図）画像の添付
-  const handleLineDrawingUpload = (e, projectId) => {
+  const handleLineDrawingUpload = async (e, projectId) => {
     const file = e.target.files[0];
     if (file) {
-      if (file.size > 900 * 1024) {
-        alert(
-          "ファイルサイズが大きすぎます。1MB以下の画像を使用してください。"
-        );
+      if (file.size > MAX_UPLOAD_BYTES) {
+        alert("ファイルサイズが大きすぎます。20MB以下の画像を使用してください。");
+        e.target.value = "";
         return;
       }
-      const reader = new FileReader();
-      reader.onloadend = async () => {
-        const base64String = reader.result;
-        try {
-          const projectRef = doc(
-            db,
-            "artifacts",
-            appId,
-            "public",
-            "data",
-            "projects",
-            projectId
-          );
-          await updateDoc(projectRef, { lineDrawing: base64String });
-        } catch (error) {
-          console.error("Error saving line drawing:", error);
-          alert("ライン図の保存に失敗しました。");
-        }
-      };
-      reader.readAsDataURL(file);
+      try {
+        const url = await uploadImageToStorage(file, "lineDrawings", projectId);
+        const projectRef = doc(
+          db,
+          "artifacts",
+          appId,
+          "public",
+          "data",
+          "projects",
+          projectId
+        );
+        const prevProj = projects.find((p) => p.id === projectId);
+        await updateDoc(projectRef, { lineDrawing: url });
+        // 差し替え時、旧ライン図がStorageにあれば削除（ゴミ防止）
+        if (prevProj) await deleteStorageFileIfNeeded(prevProj.lineDrawing);
+      } catch (error) {
+        console.error("Error saving line drawing:", error);
+        alert("ライン図の保存に失敗しました。");
+      }
     }
     // 同じファイルを再選択できるよう入力値をリセット
     e.target.value = "";
@@ -1017,6 +1050,7 @@ export default function App() {
 
   const deleteLineDrawing = async (projectId) => {
     if (!user) return;
+    const p = projects.find((pr) => pr.id === projectId);
     const projectRef = doc(
       db,
       "artifacts",
@@ -1027,6 +1061,7 @@ export default function App() {
       projectId
     );
     await updateDoc(projectRef, { lineDrawing: null });
+    if (p) await deleteStorageFileIfNeeded(p.lineDrawing);
   };
 
   const toggleTaskExpand = (taskId) => {
@@ -2224,7 +2259,7 @@ export default function App() {
                                 className="text-gray-400 mb-1"
                               />
                               <p className="text-[10px] md:text-xs text-gray-500">
-                                ライン図を選択 (1MB以下)
+                                ライン図を選択 (20MB以下)
                               </p>
                             </div>
                             <input
@@ -2858,7 +2893,7 @@ export default function App() {
                                                             className="text-gray-400 mb-0.5"
                                                           />
                                                           <p className="text-[9px] md:text-[10px] text-gray-500">
-                                                            画像を選択(1MB以下)
+                                                            画像を選択(20MB以下)
                                                           </p>
                                                         </div>
                                                         <input

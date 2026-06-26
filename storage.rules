@@ -1,0 +1,21 @@
+rules_version = '2';
+
+// A-Task: Firebase Storage セキュリティルール
+// 画像（サブタスク画像 / ライン図）は artifacts/{appId}/... 配下に保存される。
+// このアプリは匿名認証(signInAnonymously)を使うため、
+// 「ログイン済み（匿名含む）ユーザーのみ読み書き可」とする。
+//
+// 適用方法（どちらか）:
+//   1) Firebase コンソール → Storage → Rules タブにこの内容を貼り付けて「公開」
+//   2) Firebase CLI: firebase deploy --only storage
+//      （firebase.json の "storage": { "rules": "storage.rules" } を設定）
+//
+// ※ 事前に Firebase コンソールで Storage を「始める(Get started)」で有効化しておくこと。
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /artifacts/{appId}/{allPaths=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}
