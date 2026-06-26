@@ -5,6 +5,12 @@ import GanttTimeline, {
   TimelineSortSettings,
 } from "./GanttTimeline";
 import {
+  calculateSuggestedDeadline,
+  getDeadlineStatus,
+  getDeadlineColorClass,
+  buildProjectTsv,
+} from "./lib/taskUtils";
+import {
   Plus,
   Calendar,
   CheckCircle,
@@ -271,6 +277,13 @@ export default function App() {
   const [subTasks, setSubTasks] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // --- User Management State ---
+  const [appUsers, setAppUsers] = useState([]);
+  const [currentUserAccount, setCurrentUserAccount] = useState(null);
+  const [isRegisterMode, setIsRegisterMode] = useState(false);
+  const [registerInput, setRegisterInput] = useState({ id: "", password: "", name: "" });
+  const [loginInput, setLoginInput] = useState({ id: "", password: "" });
+
   // --- Firestore Listeners ---
   useEffect(() => {
     if (!db || !appId || !user) return;
@@ -300,6 +313,14 @@ export default function App() {
       "public",
       "data",
       "subTasks"
+    );
+    const usersPath = collection(
+      db,
+      "artifacts",
+      appId,
+      "public",
+      "data",
+      "users"
     );
 
     const unsubProjects = onSnapshot(
@@ -339,10 +360,23 @@ export default function App() {
       (error) => console.error("SubTasks Sync Error:", error)
     );
 
+    const unsubUsers = onSnapshot(
+      query(usersPath),
+      (snapshot) => {
+        const data = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+        setAppUsers(data);
+      },
+      (error) => console.error("Users Sync Error:", error)
+    );
+
     return () => {
       unsubProjects();
       unsubTasks();
       unsubSubTasks();
+      unsubUsers();
     };
   }, [db, appId, user]);
 
@@ -362,6 +396,7 @@ export default function App() {
     const routes: Record<string, string> = {
       dashboard: "/", timeline: "/timeline", input: "/input",
       management: "/management", archive: "/archive", share: "/share",
+      users: "/users",
     };
     navigate(routes[tab] || "/");
   };
@@ -400,6 +435,7 @@ export default function App() {
     title: "",
     deadline: "",
     priority: "Medium",
+    assigneeId: "",
   });
   const [newSubTaskTitles, setNewSubTaskTitles] = useState({});
   const [attachmentMode, setAttachmentMode] = useState({});
@@ -473,48 +509,6 @@ export default function App() {
     if (projectTasks.length === 0) return 0;
     const completedTasks = projectTasks.filter((t) => t.completed).length;
     return Math.round((completedTasks / projectTasks.length) * 100);
-  };
-
-  const calculateSuggestedDeadline = (title, deliveryDateStr) => {
-    if (!deliveryDateStr) return "";
-    const deliveryDate = new Date(deliveryDateStr);
-    if (isNaN(deliveryDate)) return "";
-
-    let offsetDays = -3;
-    if (title.match(/手配|注文|見積|発注/)) offsetDays = -30;
-    else if (title.match(/設計|作図|計画/)) offsetDays = -20;
-    else if (title.match(/準備|確認|リスト/)) offsetDays = -7;
-    else if (title.match(/報告|請求/)) offsetDays = 3;
-
-    deliveryDate.setDate(deliveryDate.getDate() + offsetDays);
-    const yyyy = deliveryDate.getFullYear();
-    const mm = String(deliveryDate.getMonth() + 1).padStart(2, "0");
-    const dd = String(deliveryDate.getDate()).padStart(2, "0");
-    return `${yyyy}-${mm}-${dd}`;
-  };
-
-  // 期限から状態(色分け用)を判定する関数
-  const getDeadlineStatus = (deadlineStr, isCompleted) => {
-    if (!deadlineStr || isCompleted) return "normal";
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const deadlineDate = new Date(deadlineStr);
-    deadlineDate.setHours(0, 0, 0, 0);
-
-    const diffTime = deadlineDate.getTime() - today.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-    if (diffDays < 0) return "overdue"; // 過去（期限切れ）
-    if (diffDays <= 3) return "urgent"; // 3日以内（期限間近）
-    return "normal";
-  };
-
-  const getDeadlineColorClass = (status) => {
-    if (status === "overdue")
-      return "text-red-600 font-bold bg-red-50 px-1.5 py-0.5 rounded";
-    if (status === "urgent")
-      return "text-amber-600 font-bold bg-amber-50 px-1.5 py-0.5 rounded";
-    return "text-gray-500";
   };
 
   const getSuggestions = (project) => {
@@ -622,29 +616,7 @@ export default function App() {
   };
 
   const copyToExcel = (project) => {
-    const projectTasks = tasks.filter((t) => t.projectId === project.id);
-    let tsv = `階層\t項目名\t期限\t状態\t備考\n`;
-    tsv += `1\t[工事] ${project.machineNumber} ${project.projectName}\t${project.deliveryDate}\t${project.status}\t${project.customer}\n`;
-
-    projectTasks.forEach((task) => {
-      const taskStatus = task.completed ? "完了" : "未完了";
-      const taskMemo = task.memo
-        ? ` [メモ: ${task.memo.replace(/\n/g, " ")}]`
-        : "";
-      tsv += `2\t${task.title}\t${task.deadline || "-"}\t${taskStatus}\t${
-        task.priority === "High" ? "優先度:高" : ""
-      }${taskMemo}\n`;
-
-      const relatedSubTasks = subTasks.filter((st) => st.taskId === task.id);
-      relatedSubTasks.forEach((st) => {
-        const stStatus = st.completed ? "完了" : "未完了";
-        const stMemo = st.memo ? ` [メモ: ${st.memo.replace(/\n/g, " ")}]` : "";
-        tsv += `3\t    - ${st.title}\t${
-          st.deadline || "-"
-        }\t${stStatus}\t${stMemo}\n`;
-      });
-    });
-
+    const tsv = buildProjectTsv(project, tasks, subTasks);
     navigator.clipboard.writeText(tsv).then(() => {
       alert(
         "Excel形式でクリップボードにコピーしました。\nExcelを開いて貼り付け(Ctrl+V)してください。"
@@ -781,11 +753,11 @@ export default function App() {
   const handleAddTask = async (e) => {
     e.preventDefault();
     if (!newTask.title || !selectedProjectId || !user) return;
-    addTask(newTask.title, newTask.deadline, newTask.priority);
-    setNewTask({ title: "", deadline: "", priority: "Medium" });
+    addTask(newTask.title, newTask.deadline, newTask.priority, newTask.assigneeId);
+    setNewTask({ title: "", deadline: "", priority: "Medium", assigneeId: "" });
   };
 
-  const addTask = async (title, deadline = "", priority = "Medium") => {
+  const addTask = async (title, deadline = "", priority = "Medium", assigneeId = "") => {
     if (!selectedProjectId || !user) return;
     try {
       const docRef = await addDoc(
@@ -797,6 +769,8 @@ export default function App() {
           priority: priority,
           completed: false,
           memo: "",
+          assigneeId: assigneeId,
+          assignerId: currentUserAccount ? currentUserAccount.id : "",
           createdAt: Date.now(),
         }
       );
@@ -1006,6 +980,55 @@ export default function App() {
     await updateDoc(subTaskRef, { image: null });
   };
 
+  // 工事案件（機番）に紐づくライン図（組立承認図）画像の添付
+  const handleLineDrawingUpload = (e, projectId) => {
+    const file = e.target.files[0];
+    if (file) {
+      if (file.size > 900 * 1024) {
+        alert(
+          "ファイルサイズが大きすぎます。1MB以下の画像を使用してください。"
+        );
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const base64String = reader.result;
+        try {
+          const projectRef = doc(
+            db,
+            "artifacts",
+            appId,
+            "public",
+            "data",
+            "projects",
+            projectId
+          );
+          await updateDoc(projectRef, { lineDrawing: base64String });
+        } catch (error) {
+          console.error("Error saving line drawing:", error);
+          alert("ライン図の保存に失敗しました。");
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+    // 同じファイルを再選択できるよう入力値をリセット
+    e.target.value = "";
+  };
+
+  const deleteLineDrawing = async (projectId) => {
+    if (!user) return;
+    const projectRef = doc(
+      db,
+      "artifacts",
+      appId,
+      "public",
+      "data",
+      "projects",
+      projectId
+    );
+    await updateDoc(projectRef, { lineDrawing: null });
+  };
+
   const toggleTaskExpand = (taskId) => {
     setExpandedTaskIds((prev) =>
       prev.includes(taskId)
@@ -1058,11 +1081,59 @@ export default function App() {
   // --- Password Login Handler ---
   const handleLogin = (e) => {
     e.preventDefault();
-    if (passwordInput === APP_PASSWORD) {
-      setIsAppLocked(false);
-      setLoginError("");
+    if (loginInput.id && loginInput.password) {
+      const foundUser = appUsers.find(
+        (u) => u.userId === loginInput.id && u.password === loginInput.password
+      );
+      if (foundUser) {
+        setCurrentUserAccount(foundUser);
+        setIsAppLocked(false);
+        setLoginError("");
+      } else {
+        setLoginError("ユーザーIDまたはパスワードが違います");
+      }
     } else {
-      setLoginError("パスワードが違います");
+      // 既存の汎用パスワード（後方互換用）
+      if (loginInput.password === APP_PASSWORD && !loginInput.id) {
+        setCurrentUserAccount({ id: "guest", name: "ゲスト", role: "作業者" });
+        setIsAppLocked(false);
+        setLoginError("");
+      } else {
+        setLoginError("IDとパスワードを入力してください");
+      }
+    }
+  };
+
+  const handleRegister = async (e) => {
+    e.preventDefault();
+    if (!registerInput.id || !registerInput.password || !registerInput.name) {
+      setLoginError("全ての項目を入力してください");
+      return;
+    }
+    if (appUsers.some((u) => u.userId === registerInput.id)) {
+      setLoginError("このユーザーIDは既に使われています");
+      return;
+    }
+    try {
+      const isFirstUser = appUsers.length === 0;
+      const newUser = {
+        userId: registerInput.id,
+        password: registerInput.password,
+        name: registerInput.name,
+        role: isFirstUser ? "サイト管理者" : "作業者",
+        createdAt: Date.now(),
+      };
+      await addDoc(
+        collection(db, "artifacts", appId, "public", "data", "users"),
+        newUser
+      );
+      setIsRegisterMode(false);
+      setLoginError("");
+      setRegisterInput({ id: "", password: "", name: "" });
+      alert("ユーザー登録が完了しました。ログインしてください。");
+    } catch (err) {
+      console.error(err);
+      setLoginError("ユーザー登録に失敗しました");
     }
   };
 
@@ -1132,7 +1203,7 @@ export default function App() {
   // --- Render Password Screen ---
   if (isAppLocked) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4 font-sans">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4 font-sans relative">
         <div className="bg-white p-8 rounded-2xl shadow-lg max-w-sm w-full border border-gray-100">
           <div className="text-center mb-6">
             <div className="bg-emerald-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -1141,28 +1212,96 @@ export default function App() {
             <h1 className="text-2xl font-bold text-gray-800">A-Task</h1>
             <p className="text-sm text-gray-500 mt-1">工事管理・Todoアプリ</p>
           </div>
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div>
-              <input
-                type="password"
-                placeholder="パスワードを入力"
-                className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all"
-                value={passwordInput}
-                onChange={(e) => setPasswordInput(e.target.value)}
-                autoFocus
-              />
-              {loginError && (
-                <p className="text-red-500 text-xs mt-2 ml-1">{loginError}</p>
-              )}
-            </div>
-            <button
-              type="submit"
-              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl transition-colors shadow-sm"
-            >
-              ログイン
-            </button>
-          </form>
+          {isRegisterMode ? (
+            <form onSubmit={handleRegister} className="space-y-4">
+              <div>
+                <input
+                  type="text"
+                  placeholder="ユーザーID"
+                  className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all mb-3"
+                  value={registerInput.id}
+                  onChange={(e) => setRegisterInput({ ...registerInput, id: e.target.value })}
+                  required
+                />
+                <input
+                  type="password"
+                  placeholder="パスワード"
+                  className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all mb-3"
+                  value={registerInput.password}
+                  onChange={(e) => setRegisterInput({ ...registerInput, password: e.target.value })}
+                  required
+                />
+                <input
+                  type="text"
+                  placeholder="表示名（名前）"
+                  className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all mb-3"
+                  value={registerInput.name}
+                  onChange={(e) => setRegisterInput({ ...registerInput, name: e.target.value })}
+                  required
+                />
+                {loginError && (
+                  <p className="text-red-500 text-xs mt-2 ml-1">{loginError}</p>
+                )}
+              </div>
+              <button
+                type="submit"
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition-colors shadow-sm"
+              >
+                登録する
+              </button>
+              <div className="text-center mt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsRegisterMode(false);
+                    setLoginError("");
+                  }}
+                  className="text-xs text-gray-400 hover:text-gray-600"
+                >
+                  ログインへ戻る
+                </button>
+              </div>
+            </form>
+          ) : (
+            <form onSubmit={handleLogin} className="space-y-4">
+              <div>
+                <input
+                  type="text"
+                  placeholder="ユーザーID"
+                  className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all mb-3"
+                  value={loginInput.id}
+                  onChange={(e) => setLoginInput({ ...loginInput, id: e.target.value })}
+                  autoFocus
+                />
+                <input
+                  type="password"
+                  placeholder="パスワードを入力"
+                  className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all"
+                  value={loginInput.password}
+                  onChange={(e) => setLoginInput({ ...loginInput, password: e.target.value })}
+                />
+                {loginError && (
+                  <p className="text-red-500 text-xs mt-2 ml-1">{loginError}</p>
+                )}
+              </div>
+              <button
+                type="submit"
+                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl transition-colors shadow-sm"
+              >
+                ログイン
+              </button>
+            </form>
+          )}
         </div>
+        {!isRegisterMode && (
+          <button
+            onClick={() => setIsRegisterMode(true)}
+            className="absolute bottom-4 right-4 text-[10px] text-gray-300 hover:text-gray-400 opacity-50"
+            title="ユーザー登録"
+          >
+            新規登録
+          </button>
+        )}
       </div>
     );
   }
@@ -1338,6 +1477,27 @@ export default function App() {
             {!isSidebarCollapsed && <span>新規登録</span>}
           </button>
 
+          {currentUserAccount?.role === "サイト管理者" && (
+            <button
+              onClick={() => {
+                setActiveTab("users");
+                setSelectedProjectId(null);
+                setIsMobileMenuOpen(false);
+              }}
+              className={`w-full flex items-center ${
+                isSidebarCollapsed ? "justify-center px-0" : "gap-3 px-4"
+              } py-3 rounded-lg text-sm font-medium transition-colors ${
+                activeTab === "users"
+                  ? "bg-emerald-50 text-emerald-700"
+                  : "text-gray-600 hover:bg-gray-50"
+              }`}
+              title="ユーザー管理"
+            >
+              <Users size={18} />
+              {!isSidebarCollapsed && <span>ユーザー管理</span>}
+            </button>
+          )}
+
           <button
             onClick={() => {
               setActiveTab("management");
@@ -1423,26 +1583,102 @@ export default function App() {
             )}
           </div>
           {!isSidebarCollapsed ? (
-            <button
-              onClick={resetData}
-              className="w-full text-xs text-gray-400 hover:text-red-500 flex items-center justify-center gap-1 py-2 mt-2"
-            >
-              <Trash2 size={12} /> 全データを削除
-            </button>
+            <>
+              <button
+                onClick={resetData}
+                className="w-full text-xs text-gray-400 hover:text-red-500 flex items-center justify-center gap-1 py-2 mt-2"
+              >
+                <Trash2 size={12} /> 全データを削除
+              </button>
+              <button
+                onClick={() => {
+                  setIsAppLocked(true);
+                  setCurrentUserAccount(null);
+                  setLoginInput({ id: "", password: "" });
+                }}
+                className="w-full text-xs text-gray-400 hover:text-gray-600 flex items-center justify-center gap-1 py-2 mt-1"
+              >
+                <Lock size={12} /> ログアウト
+              </button>
+            </>
           ) : (
-            <button
-              onClick={resetData}
-              className="text-gray-400 hover:text-red-500 py-2 mt-2"
-              title="全データを削除"
-            >
-              <Trash2 size={16} />
-            </button>
+            <>
+              <button
+                onClick={resetData}
+                className="text-gray-400 hover:text-red-500 py-2 mt-2"
+                title="全データを削除"
+              >
+                <Trash2 size={16} />
+              </button>
+              <button
+                onClick={() => {
+                  setIsAppLocked(true);
+                  setCurrentUserAccount(null);
+                  setLoginInput({ id: "", password: "" });
+                }}
+                className="text-gray-400 hover:text-gray-600 py-2 mt-1"
+                title="ログアウト"
+              >
+                <Lock size={16} />
+              </button>
+            </>
           )}
         </div>
       </aside>
 
       {/* --- Main Content --- */}
       <main className="flex-1 overflow-y-auto p-4 md:p-8 print:p-0 print:overflow-visible h-[calc(100dvh-60px)] md:h-screen w-full relative">
+        {/* --- USERS VIEW --- */}
+        {activeTab === "users" && currentUserAccount?.role === "サイト管理者" && (
+          <div className="max-w-5xl mx-auto space-y-6 md:space-y-8">
+            <header>
+              <h2 className="text-xl md:text-2xl font-bold text-gray-900">
+                ユーザー管理
+              </h2>
+              <p className="text-sm text-gray-500">
+                システムを利用するユーザーの権限を設定します。
+              </p>
+            </header>
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">表示名</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ユーザーID</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">権限</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {appUsers.map((u) => (
+                    <tr key={u.id}>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">{u.name}</td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{u.userId}</td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                        <select
+                          value={u.role}
+                          onChange={async (e) => {
+                            try {
+                              await updateDoc(doc(db, "artifacts", appId, "public", "data", "users", u.id), {
+                                role: e.target.value
+                              });
+                            } catch(err) { console.error(err); }
+                          }}
+                          className="border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:border-emerald-500"
+                        >
+                          <option value="サイト管理者">サイト管理者</option>
+                          <option value="役員">役員</option>
+                          <option value="上長">上長</option>
+                          <option value="作業者">作業者</option>
+                        </select>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
         {/* --- DASHBOARD VIEW --- */}
         {activeTab === "dashboard" && (
           <div className="max-w-5xl mx-auto space-y-6 md:space-y-8">
@@ -1949,6 +2185,65 @@ export default function App() {
                       </div>
                     </div>
 
+                    {/* ライン図（組立承認図）添付 */}
+                    {(activeTab === "management" ||
+                      activeTab === "share") && (
+                      <div className="mt-3 md:mt-4">
+                        <p className="text-xs md:text-sm font-bold text-gray-600 flex items-center gap-1 mb-1.5">
+                          <ImageIcon size={14} /> ライン図（組立承認図）
+                        </p>
+                        {currentProject.lineDrawing ? (
+                          <div className="relative group/line w-fit">
+                            <img
+                              src={currentProject.lineDrawing}
+                              alt="ライン図"
+                              className="h-20 md:h-24 w-auto rounded border border-gray-300 cursor-zoom-in bg-white"
+                              onClick={() =>
+                                setPreviewImage(currentProject.lineDrawing)
+                              }
+                            />
+                            {currentProject.status !== "Completed" &&
+                              activeTab !== "share" && (
+                                <button
+                                  onClick={() =>
+                                    deleteLineDrawing(currentProject.id)
+                                  }
+                                  className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-100 md:opacity-0 md:group-hover/line:opacity-100 transition-opacity print:hidden"
+                                  title="ライン図を削除"
+                                >
+                                  <X size={12} />
+                                </button>
+                              )}
+                          </div>
+                        ) : currentProject.status !== "Completed" &&
+                          activeTab !== "share" ? (
+                          <label className="flex flex-col items-center justify-center w-full md:w-64 h-20 md:h-24 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100">
+                            <div className="flex flex-col items-center justify-center">
+                              <ImageIcon
+                                size={18}
+                                className="text-gray-400 mb-1"
+                              />
+                              <p className="text-[10px] md:text-xs text-gray-500">
+                                ライン図を選択 (1MB以下)
+                              </p>
+                            </div>
+                            <input
+                              type="file"
+                              className="hidden"
+                              accept="image/*"
+                              onChange={(e) =>
+                                handleLineDrawingUpload(e, currentProject.id)
+                              }
+                            />
+                          </label>
+                        ) : (
+                          <p className="text-[10px] md:text-xs text-gray-400">
+                            ライン図は登録されていません
+                          </p>
+                        )}
+                      </div>
+                    )}
+
                     {/* Task Input Form */}
                     {activeTab === "management" &&
                       currentProject.status !== "Completed" && (
@@ -2025,9 +2320,29 @@ export default function App() {
                               }
                             />
                             <div className="flex flex-wrap sm:flex-nowrap gap-2">
+                              {(() => {
+                                const role = currentUserAccount?.role;
+                                let assignableUsers = [];
+                                if (role === "サイト管理者") assignableUsers = appUsers;
+                                else if (role === "役員") assignableUsers = appUsers.filter(u => u.role === "上長" || u.role === "作業者");
+                                else if (role === "上長") assignableUsers = appUsers.filter(u => u.role === "作業者");
+
+                                return assignableUsers.length > 0 ? (
+                                  <select
+                                    className="flex-1 min-w-[100px] px-2 py-1.5 text-xs border border-gray-200 rounded text-gray-600 bg-white"
+                                    value={newTask.assigneeId}
+                                    onChange={(e) => setNewTask({ ...newTask, assigneeId: e.target.value })}
+                                  >
+                                    <option value="">担当者を選択...</option>
+                                    {assignableUsers.map(u => (
+                                      <option key={u.id} value={u.id}>{u.name} ({u.role})</option>
+                                    ))}
+                                  </select>
+                                ) : null;
+                              })()}
                               <input
                                 type="date"
-                                className="flex-1 min-w-[120px] px-2 py-1.5 text-xs border border-gray-200 rounded text-gray-600 bg-white"
+                                className="flex-1 min-w-[100px] px-2 py-1.5 text-xs border border-gray-200 rounded text-gray-600 bg-white"
                                 value={newTask.deadline}
                                 onChange={(e) =>
                                   setNewTask({
@@ -2037,7 +2352,7 @@ export default function App() {
                                 }
                               />
                               <select
-                                className="flex-1 min-w-[100px] px-2 py-1.5 text-xs border border-gray-200 rounded text-gray-600 bg-white"
+                                className="flex-1 min-w-[90px] px-2 py-1.5 text-xs border border-gray-200 rounded text-gray-600 bg-white"
                                 value={newTask.priority}
                                 onChange={(e) =>
                                   setNewTask({
@@ -2290,6 +2605,18 @@ export default function App() {
                                       />
                                     </span>
                                     <div className="flex flex-wrap items-center gap-2 mt-1.5">
+                                      {task.assigneeId && (
+                                        <span className="text-[10px] md:text-xs text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 flex items-center gap-1">
+                                          <Users size={10} />
+                                          {(() => {
+                                            const assigner = appUsers.find(u => u.id === task.assignerId);
+                                            const assignee = appUsers.find(u => u.id === task.assigneeId);
+                                            const assignerName = assigner ? assigner.name : "不明";
+                                            const assigneeName = assignee ? assignee.name : "不明";
+                                            return `${assignerName} ▶ ${assigneeName}`;
+                                          })()}
+                                        </span>
+                                      )}
                                       <span
                                         className={`text-[10px] md:text-xs flex items-center gap-1 ${tColorClass}`}
                                       >
