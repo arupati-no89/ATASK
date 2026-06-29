@@ -51,6 +51,8 @@ import {
   Pencil,
   FileText,
   Lock,
+  ZoomIn,
+  ZoomOut,
 } from "lucide-react";
 
 // Firebase Imports
@@ -481,6 +483,11 @@ export default function App() {
   const [newSubTaskTitles, setNewSubTaskTitles] = useState({});
   const [attachmentMode, setAttachmentMode] = useState({});
   const [previewImage, setPreviewImage] = useState(null);
+  const [previewZoom, setPreviewZoom] = useState(1);
+
+  useEffect(() => {
+    if (previewImage) setPreviewZoom(1);
+  }, [previewImage]);
 
   // --- Mock Knowledge Base (AI提案ロジック) ---
   const taskTemplates = {
@@ -1416,21 +1423,65 @@ export default function App() {
       {/* Image Preview Modal */}
       {previewImage && (
         <div
-          className="fixed inset-0 bg-black bg-opacity-75 z-50 flex items-center justify-center p-4 print:hidden"
-          onClick={() => setPreviewImage(null)}
+          className="fixed inset-0 bg-black bg-opacity-75 z-50 flex items-center justify-center p-3 md:p-4 print:hidden"
+          onClick={() => {
+            setPreviewImage(null);
+            setPreviewZoom(1);
+          }}
         >
-          <div className="relative max-w-4xl max-h-screen">
-            <button
-              className="absolute -top-12 right-0 text-white hover:text-gray-300 p-2"
-              onClick={() => setPreviewImage(null)}
-            >
-              <X size={28} />
-            </button>
-            <img
-              src={previewImage}
-              alt="Preview"
-              className="max-w-full max-h-[90vh] rounded shadow-lg"
-            />
+          <div
+            className="relative flex h-[92vh] w-[96vw] max-w-6xl flex-col gap-2"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-end gap-2">
+              <div className="flex items-center gap-1 rounded-lg bg-white/95 p-1 shadow-lg">
+                <button
+                  className="rounded-md p-2 text-gray-600 hover:bg-gray-100 hover:text-emerald-700 disabled:opacity-40"
+                  onClick={() =>
+                    setPreviewZoom((zoom) => Math.max(0.5, zoom - 0.25))
+                  }
+                  disabled={previewZoom <= 0.5}
+                  title="縮小"
+                >
+                  <ZoomOut size={18} />
+                </button>
+                <button
+                  className="min-w-[56px] rounded-md px-2 py-2 text-xs font-bold text-gray-600 hover:bg-gray-100"
+                  onClick={() => setPreviewZoom(1)}
+                  title="100%に戻す"
+                >
+                  {Math.round(previewZoom * 100)}%
+                </button>
+                <button
+                  className="rounded-md p-2 text-gray-600 hover:bg-gray-100 hover:text-emerald-700 disabled:opacity-40"
+                  onClick={() =>
+                    setPreviewZoom((zoom) => Math.min(3, zoom + 0.25))
+                  }
+                  disabled={previewZoom >= 3}
+                  title="拡大"
+                >
+                  <ZoomIn size={18} />
+                </button>
+              </div>
+              <button
+                className="rounded-lg bg-white/95 p-2 text-gray-600 shadow-lg hover:bg-gray-100 hover:text-red-600"
+                onClick={() => {
+                  setPreviewImage(null);
+                  setPreviewZoom(1);
+                }}
+                title="閉じる"
+              >
+                <X size={22} />
+              </button>
+            </div>
+            <div className="flex-1 overflow-auto rounded-xl bg-black/30 p-2 shadow-2xl">
+              <img
+                src={previewImage}
+                alt="Preview"
+                className="mx-auto block h-auto max-w-none rounded bg-white shadow-lg"
+                style={{ width: `${previewZoom * 100}%` }}
+              />
+            </div>
           </div>
         </div>
       )}
