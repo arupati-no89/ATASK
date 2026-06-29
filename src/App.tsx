@@ -412,6 +412,20 @@ export default function App() {
   const [selectedProjectId, setSelectedProjectId] = useState(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isProjectListCollapsed, setIsProjectListCollapsed] = useState(() => {
+    try {
+      const saved = localStorage.getItem("atask-project-list-collapsed");
+      if (saved !== null) return saved === "true";
+    } catch {}
+    return true;
+  });
+  const [isDetailToolsCollapsed, setIsDetailToolsCollapsed] = useState(() => {
+    try {
+      const saved = localStorage.getItem("atask-detail-tools-collapsed");
+      if (saved !== null) return saved === "true";
+    } catch {}
+    return true;
+  });
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [showSubTaskSuggestions, setShowSubTaskSuggestions] = useState({});
   const [expandedTaskIds, setExpandedTaskIds] = useState([]);
@@ -432,6 +446,24 @@ export default function App() {
       localStorage.setItem("atask-timeline-sort-settings", JSON.stringify(timelineSortSettings));
     } catch {}
   }, [timelineSortSettings]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        "atask-project-list-collapsed",
+        String(isProjectListCollapsed)
+      );
+    } catch {}
+  }, [isProjectListCollapsed]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        "atask-detail-tools-collapsed",
+        String(isDetailToolsCollapsed)
+      );
+    } catch {}
+  }, [isDetailToolsCollapsed]);
 
   // Form States
   const [newProject, setNewProject] = useState({
@@ -1969,23 +2001,54 @@ export default function App() {
           <div className="flex flex-col xl:flex-row gap-4 md:gap-6 h-full relative">
             {/* Left: Project List (Hidden on mobile if a project is selected) */}
             <div
-              className={`xl:w-5/12 flex-col gap-3 md:gap-4 print:hidden ${
+              className={`flex-col print:hidden transition-all duration-200 ${
                 selectedProjectId ? "hidden xl:flex" : "flex"
+              } ${
+                selectedProjectId && isProjectListCollapsed
+                  ? "xl:w-12 gap-0"
+                  : "xl:w-5/12 gap-3 md:gap-4"
               }`}
             >
-              <h3 className="text-base md:text-lg font-bold text-gray-700 flex items-center gap-2 px-1">
-                {activeTab === "archive" ? (
-                  <Archive size={18} />
-                ) : activeTab === "share" ? (
-                  <Share2 size={18} />
-                ) : (
+              {selectedProjectId && isProjectListCollapsed ? (
+                <button
+                  onClick={() => setIsProjectListCollapsed(false)}
+                  className="hidden xl:flex h-full min-h-[420px] w-12 flex-col items-center gap-3 rounded-xl border border-gray-200 bg-white text-gray-500 shadow-sm hover:border-emerald-300 hover:text-emerald-700 hover:bg-emerald-50 transition-colors py-4"
+                  title="工事一覧を開く"
+                >
+                  <ChevronRight size={18} />
                   <Briefcase size={18} />
+                  <span className="text-[11px] font-bold [writing-mode:vertical-rl] tracking-wider">
+                    工事一覧
+                  </span>
+                </button>
+              ) : (
+                <>
+              <h3 className="text-base md:text-lg font-bold text-gray-700 flex items-center justify-between gap-2 px-1">
+                <span className="flex items-center gap-2 min-w-0">
+                  {activeTab === "archive" ? (
+                    <Archive size={18} />
+                  ) : activeTab === "share" ? (
+                    <Share2 size={18} />
+                  ) : (
+                    <Briefcase size={18} />
+                  )}
+                  <span className="truncate">
+                    {activeTab === "archive"
+                      ? "完了した工事一覧"
+                      : activeTab === "share"
+                      ? "共有・レポート出力"
+                      : "工事一覧（進行中）"}
+                  </span>
+                </span>
+                {selectedProjectId && (
+                  <button
+                    onClick={() => setIsProjectListCollapsed(true)}
+                    className="hidden xl:inline-flex items-center justify-center rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-emerald-600 transition-colors"
+                    title="工事一覧を折りたたむ"
+                  >
+                    <ChevronLeft size={18} />
+                  </button>
                 )}
-                {activeTab === "archive"
-                  ? "完了した工事一覧"
-                  : activeTab === "share"
-                  ? "共有・レポート出力"
-                  : "工事一覧（進行中）"}
               </h3>
 
               <div className="space-y-2 md:space-y-3 overflow-y-auto pb-10">
@@ -2077,11 +2140,17 @@ export default function App() {
                   })
                 )}
               </div>
+                </>
+              )}
             </div>
 
             {/* Right: Project Detail / Share View (Hidden on mobile if NO project is selected) */}
             <div
-              className={`xl:w-7/12 flex-col h-full md:h-[calc(100vh-64px)] md:sticky md:top-8 ${
+              className={`${
+                selectedProjectId && isProjectListCollapsed
+                  ? "xl:flex-1"
+                  : "xl:w-7/12"
+              } flex-col h-full md:h-[calc(100vh-64px)] md:sticky md:top-8 transition-all duration-200 ${
                 activeTab === "share"
                   ? "bg-white shadow-sm border border-gray-200 rounded-xl print:border-none print:shadow-none print:h-auto print:static"
                   : "bg-white rounded-xl shadow-sm border border-gray-200"
@@ -2166,6 +2235,31 @@ export default function App() {
 
                       {/* Control Buttons */}
                       <div className="flex flex-wrap items-center gap-2 print:hidden w-full md:w-auto mt-2 md:mt-0">
+                        {activeTab === "management" &&
+                          currentProject.status !== "Completed" && (
+                            <button
+                              onClick={() =>
+                                setIsDetailToolsCollapsed(
+                                  !isDetailToolsCollapsed
+                                )
+                              }
+                              className="flex-1 md:flex-none justify-center flex items-center gap-1.5 px-3 py-2 md:py-1.5 bg-white text-gray-600 border border-gray-200 rounded-lg text-xs font-medium hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 transition-colors"
+                              title={
+                                isDetailToolsCollapsed
+                                  ? "入力パネルを開く"
+                                  : "入力パネルを折りたたむ"
+                              }
+                            >
+                              {isDetailToolsCollapsed ? (
+                                <ChevronDown size={14} />
+                              ) : (
+                                <ChevronRight size={14} />
+                              )}
+                              {isDetailToolsCollapsed
+                                ? "入力を開く"
+                                : "入力を閉じる"}
+                            </button>
+                          )}
                         {activeTab === "share" ? (
                           <button
                             onClick={handlePrint}
@@ -2220,6 +2314,9 @@ export default function App() {
                       </div>
                     </div>
 
+                    {(activeTab !== "management" ||
+                      !isDetailToolsCollapsed) && (
+                      <>
                     {/* ライン図（組立承認図）添付 */}
                     {(activeTab === "management" ||
                       activeTab === "share") && (
@@ -2410,6 +2507,8 @@ export default function App() {
                           </form>
                         </div>
                       )}
+                      </>
+                    )}
                   </div>
 
                   {/* --- Task List Area --- */}
