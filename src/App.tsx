@@ -2370,6 +2370,7 @@ export default function App() {
                       <>
                     {/* ライン図（組立承認図）添付 */}
                     {(activeTab === "management" ||
+                      activeTab === "archive" ||
                       activeTab === "share") && (
                       <div className="mt-3 md:mt-4">
                         <p className="text-xs md:text-sm font-bold text-gray-600 flex items-center gap-1 mb-1.5">
