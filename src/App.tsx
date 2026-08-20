@@ -1438,9 +1438,9 @@ export default function App() {
                 <button
                   className="rounded-md p-2 text-gray-600 hover:bg-gray-100 hover:text-emerald-700 disabled:opacity-40"
                   onClick={() =>
-                    setPreviewZoom((zoom) => Math.max(0.5, zoom - 0.25))
+                    setPreviewZoom((zoom) => Math.max(0.25, zoom / 1.25))
                   }
-                  disabled={previewZoom <= 0.5}
+                  disabled={previewZoom <= 0.25}
                   title="縮小"
                 >
                   <ZoomOut size={18} />
@@ -1455,9 +1455,9 @@ export default function App() {
                 <button
                   className="rounded-md p-2 text-gray-600 hover:bg-gray-100 hover:text-emerald-700 disabled:opacity-40"
                   onClick={() =>
-                    setPreviewZoom((zoom) => Math.min(3, zoom + 0.25))
+                    setPreviewZoom((zoom) => Math.min(10, zoom * 1.25))
                   }
-                  disabled={previewZoom >= 3}
+                  disabled={previewZoom >= 10}
                   title="拡大"
                 >
                   <ZoomIn size={18} />
