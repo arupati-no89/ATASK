@@ -2855,7 +2855,7 @@ export default function App() {
                                 {/* Subtasks Area */}
                                 {isExpanded && (
                                   <div className="bg-gray-50 border-t border-gray-100 p-3 md:pl-10 pl-8">
-                                    <ul className="space-y-3 mb-4">
+                                    <ul className="space-y-1.5 mb-4">
                                       {relatedSubTasks.map((subTask) => {
                                         const stStatus = getDeadlineStatus(
                                           subTask.deadline,
@@ -2867,9 +2867,9 @@ export default function App() {
                                         return (
                                           <li
                                             key={subTask.id}
-                                            className="flex flex-col gap-1.5 text-sm group border-b border-gray-200 pb-3 last:border-0 last:pb-0"
+                                            className="flex flex-col gap-1 text-sm group border-b border-gray-200 pb-1.5 last:border-0 last:pb-0"
                                           >
-                                            <div className="flex items-start gap-2">
+                                            <div className="flex items-center gap-2">
                                               <button
                                                 onClick={() =>
                                                   currentProject.status !==
@@ -2878,7 +2878,7 @@ export default function App() {
                                                     subTask.id
                                                   )
                                                 }
-                                                className={`mt-0.5 text-gray-400 flex-shrink-0 ${
+                                                className={`text-gray-400 flex-shrink-0 ${
                                                   currentProject.status ===
                                                   "Completed"
                                                     ? ""
@@ -2895,9 +2895,9 @@ export default function App() {
                                                 )}
                                               </button>
 
-                                              <div className="flex-1 flex flex-col gap-1 min-w-0">
+                                              <div className="flex-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 min-w-0">
                                                 <span
-                                                  className={`text-xs md:text-sm break-words ${
+                                                  className={`text-xs md:text-sm break-words leading-snug ${
                                                     subTask.completed
                                                       ? "text-gray-400 line-through"
                                                       : "text-gray-700"
@@ -2922,7 +2922,7 @@ export default function App() {
 
                                                 {/* サブタスクの期限 */}
                                                 <span
-                                                  className={`text-[10px] md:text-xs flex items-center gap-1 w-fit ${stColorClass}`}
+                                                  className={`text-[10px] md:text-xs flex items-center gap-1 w-fit shrink-0 ${stColorClass}`}
                                                 >
                                                   <Clock size={10} />
                                                   <InlineEdit
